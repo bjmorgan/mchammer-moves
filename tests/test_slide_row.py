@@ -11,7 +11,6 @@ Covers:
 
 from __future__ import annotations
 
-import random
 from collections import Counter
 from itertools import permutations
 from unittest.mock import MagicMock
@@ -19,7 +18,8 @@ from unittest.mock import MagicMock
 import numpy as np
 import pytest
 
-from mchammer_moves import CustomCanonicalEnsemble, SlideRow
+from mchammer_moves import SlideRow
+from tests.conftest import seeded_uniform
 
 
 def _make_fake_configuration(occupations: list[int]):
@@ -27,6 +27,22 @@ def _make_fake_configuration(occupations: list[int]):
     config = MagicMock()
     config.occupations = np.array(occupations, dtype=int)
     return config
+
+
+def _fixed_rng(values: list[float]):
+    """Callable returning a fixed sequence of uniform draws.
+
+    Used to force `SlideRow.propose` down a specific (row, direction)
+    branch in deterministic structural tests. The callable cycles
+    through the supplied values so a single-proposal test only needs
+    to specify two draws (row index, direction).
+    """
+    seq = iter(values)
+
+    def draw() -> float:
+        return next(seq)
+
+    return draw
 
 
 def test_slide_row_plus_one_shifts_pattern_forward():
@@ -45,31 +61,12 @@ def test_slide_row_plus_one_shifts_pattern_forward():
     config = _make_fake_configuration(occupations)
 
     move = SlideRow(rows=[row])
-    random.seed(0)
-    # Force direction = +1 by patching random.choice.
-    sites, species = None, None
-    for _ in range(100):
-        random.seed(0)  # produces direction = -1 sometimes; loop until +1
-        sites_try, species_try = move.propose(config)
-        # Detect direction from the result
-        if species_try == [103, 100, 101, 102]:
-            sites, species = sites_try, species_try
-            break
-        if species_try == [101, 102, 103, 100]:
-            continue
-        random.seed(random.randint(0, 1_000_000))
-    # Bypass the loop's reliance on RNG by checking both possibilities
-    random.seed(0)
-    results = set()
-    for seed in range(50):
-        random.seed(seed)
-        s, sp = move.propose(config)
-        assert list(s) == row
-        results.add(tuple(sp))
-    expected = {(103, 100, 101, 102), (101, 102, 103, 100)}
-    assert results == expected, (
-        f"Slide produced unexpected pattern. Expected {expected}, got {results}"
-    )
+    # First draw picks the row (0.0 → row 0); second draw picks the
+    # direction (< 0.5 → +1).
+    sites, species = move.propose(config, _fixed_rng([0.0, 0.0]))
+
+    assert list(sites) == row
+    assert species == [103, 100, 101, 102]
 
 
 def test_slide_row_minus_one_shifts_pattern_backward():
@@ -79,37 +76,32 @@ def test_slide_row_minus_one_shifts_pattern_backward():
     config = _make_fake_configuration(occupations)
 
     move = SlideRow(rows=[row])
-    seen = set()
-    for seed in range(50):
-        random.seed(seed)
-        sites, species = move.propose(config)
-        assert list(sites) == row
-        seen.add(tuple(species))
-    # Forward (+1): [13, 10, 11, 12]; Backward (-1): [11, 12, 13, 10]
-    assert seen == {(13, 10, 11, 12), (11, 12, 13, 10)}
+    # First draw picks the row; second draw picks the direction
+    # (>= 0.5 → -1).
+    sites, species = move.propose(config, _fixed_rng([0.0, 0.9]))
+
+    assert list(sites) == row
+    assert species == [11, 12, 13, 10]
 
 
-def test_slide_row_period_3_pattern_invariant():
-    """A perfectly period-3 pattern is invariant under any slide that's a
-    multiple of 3.
+def test_slide_row_period_3_pattern_one_step_breaks_period():
+    """A length-6 period-3 pattern produces both forward and backward
+    shifts over a range of RNG seeds.
 
-    For row ``[0, 1, 2, 3, 4, 5]`` with pattern ``[A, B, A, B, A, B]``
-    (period 2), a single-step slide swaps the two letter positions,
-    producing ``[B, A, B, A, B, A]`` (or vice versa). For the period-3
-    pattern ``[A, B, B, A, B, B]`` on a length-6 row, the species change
-    after a single slide.
+    For the period-3 pattern ``[A, B, B, A, B, B]`` on a length-6 row,
+    a single forward slide gives ``[B, A, B, B, A, B]`` and a single
+    backward slide gives ``[B, B, A, B, B, A]``. Both must appear when
+    sampling many seeds.
     """
-    # Sanity check on a length-6, period-3 pattern.
     row = [0, 1, 2, 3, 4, 5]
     pattern = [100, 101, 101, 100, 101, 101]
     config = _make_fake_configuration(pattern)
     move = SlideRow(rows=[row])
 
-    forward_counter = Counter()
+    seen = Counter()
     for seed in range(200):
-        random.seed(seed)
-        _, species = move.propose(config)
-        forward_counter[tuple(species)] += 1
+        _, species = move.propose(config, seeded_uniform(seed))
+        seen[tuple(species)] += 1
 
     # Forward slide:  pattern[(i - 1) % 6] -> [101, 100, 101, 101, 100, 101]
     # Backward slide: pattern[(i + 1) % 6] -> [101, 101, 100, 101, 101, 100]
@@ -117,7 +109,7 @@ def test_slide_row_period_3_pattern_invariant():
         (101, 100, 101, 101, 100, 101),
         (101, 101, 100, 101, 101, 100),
     }
-    assert set(forward_counter.keys()) == expected
+    assert set(seen.keys()) == expected
 
 
 def test_slide_row_rejects_empty_rows():
@@ -143,10 +135,7 @@ def test_slide_row_detailed_balance_on_chain():
     sp_a, sp_b = 100, 101
 
     # Enumerate distinct binary occupations of length 6 with three 1s.
-    states = []
-    for perm in set(permutations([0, 0, 0, 1, 1, 1])):
-        states.append(perm)
-    states = sorted(states)
+    states = sorted(set(permutations([0, 0, 0, 1, 1, 1])))
     state_index = {s: i for i, s in enumerate(states)}
 
     def to_atomic(local: tuple[int, ...]) -> list[int]:
@@ -157,11 +146,11 @@ def test_slide_row_detailed_balance_on_chain():
 
     n_per = 6000
     transitions = np.zeros((len(states), len(states)), dtype=int)
-    random.seed(13579)
+    rng = seeded_uniform(13579)
     for src in states:
         config = _make_fake_configuration(to_atomic(src))
         for _ in range(n_per):
-            sites, species = move.propose(config)
+            sites, species = move.propose(config, rng)
             cand = list(config.occupations)
             for s, z in zip(sites, species):
                 cand[s] = z
@@ -191,9 +180,9 @@ def test_slide_row_detailed_balance_on_chain():
 
     # Sanity: must have observed at least some transitions.
     assert transitions.sum() == n_per * len(states)
-    # Diagonal: a slide of a non-uniform pattern reaches itself only via the
-    # identity orbit (period | 1 = 1). For all our states the chain is not
-    # uniform, so the diagonal should be small. Just confirm proposals
-    # actually move the system most of the time.
+    # Diagonal: a slide of a non-uniform pattern reaches itself only via
+    # the identity orbit (period | 1 = 1). For all our states the chain
+    # is not uniform, so the diagonal should be small. Just confirm
+    # proposals actually move the system most of the time.
     diag_frac = np.trace(transitions) / transitions.sum()
     assert diag_frac < 0.5, f"Most slides should change state, got diag_frac={diag_frac}"

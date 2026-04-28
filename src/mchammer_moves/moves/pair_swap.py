@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from mchammer.configuration_manager import SwapNotPossibleError
@@ -55,9 +56,21 @@ class PairSwap(Move):
         self.allowed_sites = allowed_sites
 
     def propose(
-        self, configuration: "ConfigurationManager"
+        self,
+        configuration: "ConfigurationManager",
+        next_random_number: Callable[[], float],
     ) -> tuple[list[int], list[int]] | None:
-        """Propose a swap of two sites with differing species."""
+        """Propose a swap of two sites with differing species.
+
+        ``next_random_number`` is accepted for API compliance with
+        :meth:`Move.propose` but not consumed here. Pair-swap selection
+        is delegated to ``ConfigurationManager.get_swapped_state``,
+        which draws from mchammer's seeded Python ``random`` module —
+        the same underlying stream that backs ``next_random_number`` in
+        a `CustomCanonicalEnsemble` context — so the proposal sequence
+        is reproducible without an explicit argument here.
+        """
+        del next_random_number  # Stream-shared with mchammer's RNG; see docstring.
         try:
             sites, species = configuration.get_swapped_state(
                 sublattice_index=self.sublattice_index,

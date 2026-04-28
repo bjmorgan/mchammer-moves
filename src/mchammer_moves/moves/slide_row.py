@@ -11,7 +11,7 @@ relationships when standard single-site swaps are kinetically blocked.
 
 from __future__ import annotations
 
-import random
+from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from mchammer_moves.moves.base import Move
@@ -79,7 +79,9 @@ class SlideRow(Move):
         return len(self._rows)
 
     def propose(
-        self, configuration: "ConfigurationManager"
+        self,
+        configuration: "ConfigurationManager",
+        next_random_number: Callable[[], float],
     ) -> tuple[list[int], list[int]] | None:
         """Propose a single-step slide along one row.
 
@@ -90,13 +92,16 @@ class SlideRow(Move):
         keeps the proposal characterised purely by ``(row, direction)``,
         which is what the detailed-balance argument requires.
         """
-        row = self._rows[random.randrange(len(self._rows))]
-        direction = random.choice((+1, -1))
+        # Uniform [0, n) integer; the floating-point bias is negligible
+        # for n far below 2^52, which holds for any realistic row count.
+        row_index = int(next_random_number() * len(self._rows))
+        direction = 1 if next_random_number() < 0.5 else -1
+        row = self._rows[row_index]
         occupations = configuration.occupations
         L = len(row)
 
         # Direction +1: each site i in the row receives the species of
         # row[(i - 1) % L]. Direction -1: row[(i + 1) % L].
-        offset = -1 if direction == +1 else +1
+        offset = -1 if direction == 1 else 1
         new_species = [int(occupations[row[(i + offset) % L]]) for i in range(L)]
         return list(row), new_species

@@ -19,6 +19,7 @@ import pytest
 from mchammer.ensembles import CanonicalEnsemble
 
 from mchammer_moves import CustomCanonicalEnsemble, PairSwap
+from tests.conftest import seeded_uniform
 
 
 def _enumerate_canonical_states(n_sites: int, n_minority: int) -> list[tuple[int, ...]]:
@@ -54,7 +55,7 @@ def test_pair_swap_propose_returns_swap(small_ising_setup):
     )
     occ_before = list(ensemble.configuration.occupations)
     move = PairSwap(sublattice_index=0)
-    sites, species = move.propose(ensemble.configuration)
+    sites, species = move.propose(ensemble.configuration, seeded_uniform(0))
     assert len(sites) == 2
     assert len(species) == 2
     i, j = sites
@@ -120,7 +121,10 @@ def test_pair_swap_detailed_balance(small_ising_setup):
             current_local = project_to_local(list(ensemble.configuration.occupations))
             if current_local != src_local:
                 _set_occupations(ensemble, to_full_occ(src_local))
-            sites, species = move.propose(ensemble.configuration)
+            # PairSwap.propose ignores the callable and delegates to
+            # mchammer's `get_swapped_state`, which draws from the
+            # global random module seeded above.
+            sites, species = move.propose(ensemble.configuration, seeded_uniform(0))
             # Build the candidate full occupation
             cand = list(ensemble.configuration.occupations)
             for s, z in zip(sites, species):

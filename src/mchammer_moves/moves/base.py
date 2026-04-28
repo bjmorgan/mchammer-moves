@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -36,7 +37,9 @@ class Move(ABC):
 
     @abstractmethod
     def propose(
-        self, configuration: "ConfigurationManager"
+        self,
+        configuration: "ConfigurationManager",
+        next_random_number: Callable[[], float],
     ) -> tuple[list[int], list[int]] | None:
         """Propose a trial move from the current configuration.
 
@@ -46,6 +49,13 @@ class Move(ABC):
             The current ensemble configuration. Subclasses should treat
             this as read-only — committing the move is the ensemble's
             responsibility.
+        next_random_number
+            Zero-argument callable returning a uniform float in
+            ``[0, 1)``. Subclasses requiring randomness should draw
+            from this callable rather than Python's global ``random``
+            module so that the move's randomness is tied to the
+            ensemble's seeded RNG stream and remains reproducible
+            under per-replica RNG isolation.
 
         Returns
         -------

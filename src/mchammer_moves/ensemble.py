@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import random
 from collections import Counter
 from typing import TYPE_CHECKING
 
@@ -108,6 +107,7 @@ class CustomCanonicalEnsemble(CanonicalEnsemble):
 
         self._moves: list[Move] = [m for m, _ in moves]
         self._move_weights: list[float] = [float(w) for _, w in moves]
+        self._total_weight: float = sum(self._move_weights)
         self._move_accept_counts: Counter = Counter()
         self._move_reject_counts: Counter = Counter()
 
@@ -135,9 +135,14 @@ class CustomCanonicalEnsemble(CanonicalEnsemble):
         Metropolis acceptance. Per-move accept/reject counts are updated;
         the integer return value (0 or 1) feeds the inherited global
         counters in :class:`BaseEnsemble`.
+
+        Move selection and the move's own randomness both draw from
+        :meth:`_next_random_number`, so the entire trial-step sequence
+        is reproducible from the ensemble's seeded RNG stream and
+        survives `mchammer_pt`'s per-replica RNG isolation.
         """
-        move = random.choices(self._moves, weights=self._move_weights, k=1)[0]
-        proposal = move.propose(self.configuration)
+        move = self._weighted_move_choice()
+        proposal = move.propose(self.configuration, self._next_random_number)
         if proposal is None:
             self._move_reject_counts[move.name] += 1
             return 0
@@ -149,6 +154,20 @@ class CustomCanonicalEnsemble(CanonicalEnsemble):
             return 1
         self._move_reject_counts[move.name] += 1
         return 0
+
+    def _weighted_move_choice(self) -> "Move":
+        """Pick a move by weight, drawing from the seeded RNG stream."""
+        threshold = self._next_random_number() * self._total_weight
+        acc = 0.0
+        # Linear scan; the move count is small (typically 2-5) and the
+        # extra clarity beats bisect-on-cumulative-weights at this size.
+        for move, weight in zip(self._moves, self._move_weights):
+            acc += weight
+            if threshold < acc:
+                return move
+        # Floating-point edge case: threshold slipped past the final
+        # cumulative sum. Fall through to the last move.
+        return self._moves[-1]
 
     def acceptance_rates(self) -> dict[str, dict[str, float | int]]:
         """Return per-move acceptance statistics.
