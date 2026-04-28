@@ -42,7 +42,7 @@ def test_pair_swap_alone_samples_correct_boltzmann() -> None:
     )
 
 
-def test_process_pool_propagates_per_move_acceptance() -> None:
+def test_process_pool_propagates_per_move_acceptance(small_ising_setup) -> None:
     """End-to-end integration with `mchammer_pt.process_pool`.
 
     Pins the headline migration claim: `CustomCanonicalEnsemble`
@@ -54,16 +54,18 @@ def test_process_pool_propagates_per_move_acceptance() -> None:
 
     A regression in `CustomCanonicalEnsemble.__init__` taking a
     non-picklable arg, or in mchammer-pt's spawn semantics, surfaces
-    here rather than in production.
+    here rather than in production. Uses the local `small_ising_setup`
+    fixture rather than mchammer-pt's analytic-Boltzmann fixture: the
+    integration check only needs an MC-able CE+atoms, not a calibrated
+    energy gap, so reaching into mchammer-pt's private fixture builder
+    is unnecessary.
     """
     from mchammer_pt import CanonicalParallelTempering
-    from mchammer_pt.testing import (
-        FIXTURE_CHAIN_INDICES,
-        _build_chain_ce_and_atoms,
-    )
 
-    ce, atoms = _build_chain_ce_and_atoms()
-    chain = list(FIXTURE_CHAIN_INDICES[0])
+    setup = small_ising_setup
+    ce = setup["cluster_expansion"]
+    atoms = setup["structure"]
+    chain = list(range(len(atoms)))
     with CanonicalParallelTempering.process_pool(
         cluster_expansion=ce,
         atoms=atoms,
