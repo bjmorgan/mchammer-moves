@@ -34,8 +34,8 @@ classifiers = [
 # `ensemble_kwargs=` API (mchammer-pt v0.2+); the public
 # `mchammer_pt.testing.assert_boltzmann_sampling` utility is used by
 # the combined-kernel Boltzmann-sampling test in this package.
-pt = ["mchammer-pt"]
-dev = ["pytest>=7", "scipy", "mypy", "ruff", "mchammer-pt"]
+pt = ["mchammer-pt>=0.2.0"]
+dev = ["pytest>=7", "scipy", "mypy", "ruff", "mchammer-pt>=0.2.0"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
