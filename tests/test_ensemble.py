@@ -185,6 +185,40 @@ def test_combined_pair_swap_and_slide_row_runs(small_ising_setup):
     assert rates["slide_row"]["proposed"] > 0
 
 
+def test_per_move_acceptance_propagates_to_data_container(small_ising_setup):
+    """Per-move acceptance rate fields land in the ensemble data container.
+
+    The override of `_get_ensemble_data` is what makes per-move rates
+    visible from a `mchammer_pt.ProcessPool` run, where the parent
+    only ever sees the data container that's pickled back from the
+    worker. This test pins that the rate field for each registered
+    move is present in the data container after ``run``.
+    """
+    setup = small_ising_setup
+    ensemble = CustomCanonicalEnsemble(
+        structure=setup["structure"],
+        calculator=setup["calculator"],
+        temperature=1500.0,
+        moves=[
+            (PairSwap(sublattice_index=0, name="swap_a"), 1.0),
+            (PairSwap(sublattice_index=0, name="swap_b"), 1.0),
+        ],
+        random_seed=7,
+        ensemble_data_write_interval=10,
+    )
+    ensemble.run(100)
+    df = ensemble.data_container.data
+    assert "swap_a_acceptance_rate" in df.columns
+    assert "swap_b_acceptance_rate" in df.columns
+    # Final-row acceptance rate must equal the cumulative rate from the
+    # in-memory counters (the data container records cumulative rates).
+    rates = ensemble.acceptance_rates()
+    final_swap_a = float(df["swap_a_acceptance_rate"].iloc[-1])
+    final_swap_b = float(df["swap_b_acceptance_rate"].iloc[-1])
+    assert final_swap_a == pytest.approx(rates["swap_a"]["acceptance_rate"])
+    assert final_swap_b == pytest.approx(rates["swap_b"]["acceptance_rate"])
+
+
 def test_run_method_inherited(small_ising_setup):
     """``ensemble.run(n)`` should drive the custom trial step.
 

@@ -193,6 +193,37 @@ class CustomCanonicalEnsemble(CanonicalEnsemble):
             }
         return stats
 
+    def _get_ensemble_data(self) -> dict:
+        """Extend the standard ensemble-data dict with per-move acceptance.
+
+        Adds one ``<move_name>_acceptance_rate`` key per registered move,
+        carrying the *cumulative* acceptance rate up to the current step
+        (matching `BaseEnsemble`'s native ``acceptance_ratio`` convention).
+        These fields are appended to the per-replica `BaseDataContainer`
+        at every ``ensemble_data_write_interval`` and round-trip through
+        the HDF5 bundle written by `mchammer_pt`, so per-move statistics
+        are recoverable from a `ProcessPool` run without observer
+        forwarding.
+
+        A reader of the data container sees the cumulative rate at each
+        write interval; per-interval rates can be recovered by
+        differencing the (proposed, accepted) counters across rows if
+        needed (the cumulative accept count is
+        ``acceptance_rate * proposed_at_interval`` and ``proposed`` is
+        derivable from ``mctrial`` and the move weights, though
+        recovering proposed-per-move from mctrial is an approximation
+        when weights are not equal).
+        """
+        data = super()._get_ensemble_data()
+        for move in self._moves:
+            accepted = self._move_accept_counts[move.name]
+            rejected = self._move_reject_counts[move.name]
+            proposed = accepted + rejected
+            data[f"{move.name}_acceptance_rate"] = (
+                accepted / proposed if proposed > 0 else 0.0
+            )
+        return data
+
     def reset_acceptance_counts(self) -> None:
         """Zero the per-move accept/reject counters.
 
