@@ -1,12 +1,12 @@
 """Combined-kernel Boltzmann-sampling test.
 
 Pins that `CustomCanonicalEnsemble` configured with both `PairSwap`
-and `SlideRow` produces the analytic Boltzmann distribution on
+and `CyclicShift` produces the analytic Boltzmann distribution on
 mchammer-pt's bundled fixture (4-site 1D chain, 2 Cu + 2 Au, NN-only
 pair ECI, ΔE ≈ 3 kT at the test temperature).
 
 The combined-kernel construction is the right test shape for
-`SlideRow` here because slide-row in isolation on a single
+`CyclicShift` here because slide-row in isolation on a single
 cyclic chain is exactly energy-preserving by translational
 invariance: a unit shift moves the bond at site i to site i+1 and
 the bond multiset is unchanged. So a single-chain fixture cannot
@@ -23,14 +23,14 @@ from __future__ import annotations
 
 from mchammer_pt.testing import FIXTURE_CHAIN_INDICES, assert_boltzmann_sampling
 
-from mchammer_moves import CustomCanonicalEnsemble, PairSwap, SlideRow
+from mchammer_moves import CustomCanonicalEnsemble, CyclicShift, PairSwap
 
 
-def test_combined_pair_swap_and_slide_row_samples_correct_boltzmann() -> None:
-    """`CustomCanonicalEnsemble([PairSwap, SlideRow])` matches analytic Boltzmann.
+def test_combined_pair_swap_and_cyclic_shift_samples_correct_boltzmann() -> None:
+    """`CustomCanonicalEnsemble([PairSwap, CyclicShift])` matches analytic Boltzmann.
 
     Equal weights so both moves fire frequently; the bundled fixture's
-    single 4-site chain is supplied to `SlideRow` as the row argument.
+    single 4-site chain is supplied to `CyclicShift` as the row argument.
     """
     chain = list(FIXTURE_CHAIN_INDICES[0])
     assert_boltzmann_sampling(
@@ -38,7 +38,7 @@ def test_combined_pair_swap_and_slide_row_samples_correct_boltzmann() -> None:
         ensemble_kwargs={
             "moves": [
                 (PairSwap(sublattice_index=0), 1.0),
-                (SlideRow(rows=[chain]), 1.0),
+                (CyclicShift(cycles=[chain]), 1.0),
             ],
         },
     )

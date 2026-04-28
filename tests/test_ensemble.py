@@ -10,7 +10,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from mchammer_moves import CustomCanonicalEnsemble, PairSwap, SlideRow
+from mchammer_moves import CustomCanonicalEnsemble, CyclicShift, PairSwap
 
 
 def test_per_move_counts_match_trial_step_returns(small_ising_setup):
@@ -153,8 +153,8 @@ def test_constructor_validation(small_ising_setup):
         )
 
 
-def test_combined_pair_swap_and_slide_row_runs(small_ising_setup):
-    """Combined PairSwap + SlideRow ensemble runs without error.
+def test_combined_pair_swap_and_cyclic_shift_runs(small_ising_setup):
+    """Combined PairSwap + CyclicShift ensemble runs without error.
 
     Uses a synthetic single-row over the small system. The point is
     smoke-coverage of weight dispatch through both move types and
@@ -169,7 +169,7 @@ def test_combined_pair_swap_and_slide_row_runs(small_ising_setup):
         temperature=2000.0,
         moves=[
             (PairSwap(sublattice_index=0), 1.0),
-            (SlideRow(rows=rows), 0.1),
+            (CyclicShift(cycles=rows), 0.1),
         ],
         random_seed=42,
     )
@@ -177,11 +177,11 @@ def test_combined_pair_swap_and_slide_row_runs(small_ising_setup):
     for _ in range(n):
         ensemble._do_trial_step()
     rates = ensemble.acceptance_rates()
-    assert set(rates.keys()) == {"pair_swap", "slide_row"}
-    assert rates["pair_swap"]["proposed"] + rates["slide_row"]["proposed"] == n
+    assert set(rates.keys()) == {"pair_swap", "cyclic_shift"}
+    assert rates["pair_swap"]["proposed"] + rates["cyclic_shift"]["proposed"] == n
     # Both moves should have non-zero proposal counts
     assert rates["pair_swap"]["proposed"] > 0
-    assert rates["slide_row"]["proposed"] > 0
+    assert rates["cyclic_shift"]["proposed"] > 0
 
 
 def test_per_move_acceptance_propagates_to_data_container(small_ising_setup):

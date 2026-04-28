@@ -1,4 +1,4 @@
-"""Tests for :class:`SlideRow`.
+"""Tests for :class:`CyclicShift`.
 
 Covers:
 
@@ -18,7 +18,7 @@ from unittest.mock import MagicMock
 import numpy as np
 import pytest
 
-from mchammer_moves import SlideRow
+from mchammer_moves import CyclicShift
 from tests.conftest import seeded_uniform
 
 
@@ -32,7 +32,7 @@ def _make_fake_configuration(occupations: list[int]):
 def _fixed_rng(values: list[float]):
     """Callable returning a fixed sequence of uniform draws.
 
-    Used to force `SlideRow.propose` down a specific (row, direction)
+    Used to force `CyclicShift.propose` down a specific (row, direction)
     branch in deterministic structural tests. The callable cycles
     through the supplied values so a single-proposal test only needs
     to specify two draws (row index, direction).
@@ -45,7 +45,7 @@ def _fixed_rng(values: list[float]):
     return draw
 
 
-def test_slide_row_plus_one_shifts_pattern_forward():
+def test_cyclic_shift_plus_one_shifts_pattern_forward():
     """Direction ``+1`` shifts each species one site forward along the row.
 
     For row ``[10, 11, 12, 13]`` with species ``[A, B, C, D]``, a ``+1``
@@ -60,7 +60,7 @@ def test_slide_row_plus_one_shifts_pattern_forward():
     occupations[13] = 103  # D
     config = _make_fake_configuration(occupations)
 
-    move = SlideRow(rows=[row])
+    move = CyclicShift(cycles=[row])
     # First draw picks the row (0.0 → row 0); second draw picks the
     # direction (< 0.5 → +1).
     sites, species = move.propose(config, _fixed_rng([0.0, 0.0]))
@@ -69,13 +69,13 @@ def test_slide_row_plus_one_shifts_pattern_forward():
     assert species == [103, 100, 101, 102]
 
 
-def test_slide_row_minus_one_shifts_pattern_backward():
+def test_cyclic_shift_minus_one_shifts_pattern_backward():
     """Direction ``-1`` shifts each species one site backward along the row."""
     row = [0, 1, 2, 3]
     occupations = [10, 11, 12, 13]
     config = _make_fake_configuration(occupations)
 
-    move = SlideRow(rows=[row])
+    move = CyclicShift(cycles=[row])
     # First draw picks the row; second draw picks the direction
     # (>= 0.5 → -1).
     sites, species = move.propose(config, _fixed_rng([0.0, 0.9]))
@@ -84,7 +84,7 @@ def test_slide_row_minus_one_shifts_pattern_backward():
     assert species == [11, 12, 13, 10]
 
 
-def test_slide_row_period_3_pattern_one_step_breaks_period():
+def test_cyclic_shift_period_3_pattern_one_step_breaks_period():
     """A length-6 period-3 pattern produces both forward and backward
     shifts over a range of RNG seeds.
 
@@ -96,7 +96,7 @@ def test_slide_row_period_3_pattern_one_step_breaks_period():
     row = [0, 1, 2, 3, 4, 5]
     pattern = [100, 101, 101, 100, 101, 101]
     config = _make_fake_configuration(pattern)
-    move = SlideRow(rows=[row])
+    move = CyclicShift(cycles=[row])
 
     seen = Counter()
     for seed in range(200):
@@ -112,17 +112,17 @@ def test_slide_row_period_3_pattern_one_step_breaks_period():
     assert set(seen.keys()) == expected
 
 
-def test_slide_row_rejects_empty_rows():
-    with pytest.raises(ValueError, match="at least one row"):
-        SlideRow(rows=[])
+def test_cyclic_shift_rejects_empty_cycles():
+    with pytest.raises(ValueError, match="at least one cycle"):
+        CyclicShift(cycles=[])
     with pytest.raises(ValueError, match="empty"):
-        SlideRow(rows=[[]])
+        CyclicShift(cycles=[[]])
     with pytest.raises(ValueError, match="length 1"):
-        SlideRow(rows=[[0]])
+        CyclicShift(cycles=[[0]])
 
 
-def test_slide_row_detailed_balance_on_chain():
-    """Detailed balance for SlideRow on a single 6-site chain.
+def test_cyclic_shift_detailed_balance_on_chain():
+    """Detailed balance for CyclicShift on a single 6-site chain.
 
     With a single row of length 6 and binary species, the full canonical
     state space at composition (3, 3) has C(6, 3) = 20 states. Slide
@@ -131,7 +131,7 @@ def test_slide_row_detailed_balance_on_chain():
     transition matrix is symmetric.
     """
     row = list(range(6))
-    move = SlideRow(rows=[row])
+    move = CyclicShift(cycles=[row])
     sp_a, sp_b = 100, 101
 
     # Enumerate distinct binary occupations of length 6 with three 1s.
@@ -172,7 +172,7 @@ def test_slide_row_detailed_balance_on_chain():
                 failures.append((i, j, a, b, z))
 
     assert not failures, (
-        "SlideRow detailed-balance violation: "
+        "CyclicShift detailed-balance violation: "
         + ", ".join(
             f"({i},{j}): {a} vs {b} (z={z:.2f})" for i, j, a, b, z in failures
         )
