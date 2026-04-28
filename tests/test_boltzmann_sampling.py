@@ -54,11 +54,7 @@ def test_process_pool_propagates_per_move_acceptance(small_ising_setup) -> None:
 
     A regression in `CustomCanonicalEnsemble.__init__` taking a
     non-picklable arg, or in mchammer-pt's spawn semantics, surfaces
-    here rather than in production. Uses the local `small_ising_setup`
-    fixture rather than mchammer-pt's analytic-Boltzmann fixture: the
-    integration check only needs an MC-able CE+atoms, not a calibrated
-    energy gap, so reaching into mchammer-pt's private fixture builder
-    is unnecessary.
+    here rather than in production.
     """
     from mchammer_pt import CanonicalParallelTempering
 
