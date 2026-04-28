@@ -152,7 +152,7 @@ def test_slide_row_detailed_balance_on_chain():
         for _ in range(n_per):
             sites, species = move.propose(config, rng)
             cand = list(config.occupations)
-            for s, z in zip(sites, species):
+            for s, z in zip(sites, species, strict=True):
                 cand[s] = z
             dst = from_atomic(cand)
             transitions[state_index[src], state_index[dst]] += 1
@@ -185,4 +185,6 @@ def test_slide_row_detailed_balance_on_chain():
     # is not uniform, so the diagonal should be small. Just confirm
     # proposals actually move the system most of the time.
     diag_frac = np.trace(transitions) / transitions.sum()
-    assert diag_frac < 0.5, f"Most slides should change state, got diag_frac={diag_frac}"
+    assert diag_frac < 0.5, (
+        f"Most slides should change state, got diag_frac={diag_frac}"
+    )

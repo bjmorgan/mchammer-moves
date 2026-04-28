@@ -5,7 +5,9 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
-from mchammer.configuration_manager import SwapNotPossibleError
+from mchammer.configuration_manager import (  # type: ignore[import-untyped]
+    SwapNotPossibleError,
+)
 
 from mchammer_moves.moves.base import Move
 
@@ -57,7 +59,7 @@ class PairSwap(Move):
 
     def propose(
         self,
-        configuration: "ConfigurationManager",
+        configuration: ConfigurationManager,
         next_random_number: Callable[[], float],
     ) -> tuple[list[int], list[int]] | None:
         """Propose a swap of two sites with differing species.

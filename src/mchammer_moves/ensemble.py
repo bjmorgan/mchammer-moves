@@ -7,14 +7,16 @@ from typing import TYPE_CHECKING
 
 from ase import Atoms
 from ase.units import kB
-from mchammer.calculators.base_calculator import BaseCalculator
-from mchammer.ensembles import CanonicalEnsemble
+from mchammer.calculators.base_calculator import (  # type: ignore[import-untyped]
+    BaseCalculator,
+)
+from mchammer.ensembles import CanonicalEnsemble  # type: ignore[import-untyped]
 
 if TYPE_CHECKING:
     from mchammer_moves.moves.base import Move
 
 
-class CustomCanonicalEnsemble(CanonicalEnsemble):
+class CustomCanonicalEnsemble(CanonicalEnsemble):  # type: ignore[misc]
     """Canonical ensemble parameterised by an arbitrary list of moves.
 
     Drop-in replacement for :class:`mchammer.ensembles.CanonicalEnsemble`
@@ -63,7 +65,7 @@ class CustomCanonicalEnsemble(CanonicalEnsemble):
         structure: Atoms,
         calculator: BaseCalculator,
         temperature: float,
-        moves: list[tuple["Move", float]],
+        moves: list[tuple[Move, float]],
         user_tag: str | None = None,
         boltzmann_constant: float = kB,
         random_seed: int | None = None,
@@ -108,8 +110,8 @@ class CustomCanonicalEnsemble(CanonicalEnsemble):
         self._moves: list[Move] = [m for m, _ in moves]
         self._move_weights: list[float] = [float(w) for _, w in moves]
         self._total_weight: float = sum(self._move_weights)
-        self._move_accept_counts: Counter = Counter()
-        self._move_reject_counts: Counter = Counter()
+        self._move_accept_counts: Counter[str] = Counter()
+        self._move_reject_counts: Counter[str] = Counter()
 
         names = [m.name for m in self._moves]
         if len(set(names)) != len(names):
@@ -118,7 +120,7 @@ class CustomCanonicalEnsemble(CanonicalEnsemble):
             )
 
     @property
-    def moves(self) -> list["Move"]:
+    def moves(self) -> list[Move]:
         """The moves registered with the ensemble (read-only view)."""
         return list(self._moves)
 
@@ -155,13 +157,13 @@ class CustomCanonicalEnsemble(CanonicalEnsemble):
         self._move_reject_counts[move.name] += 1
         return 0
 
-    def _weighted_move_choice(self) -> "Move":
+    def _weighted_move_choice(self) -> Move:
         """Pick a move by weight, drawing from the seeded RNG stream."""
         threshold = self._next_random_number() * self._total_weight
         acc = 0.0
         # Linear scan; the move count is small (typically 2-5) and the
         # extra clarity beats bisect-on-cumulative-weights at this size.
-        for move, weight in zip(self._moves, self._move_weights):
+        for move, weight in zip(self._moves, self._move_weights, strict=True):
             acc += weight
             if threshold < acc:
                 return move
@@ -193,7 +195,7 @@ class CustomCanonicalEnsemble(CanonicalEnsemble):
             }
         return stats
 
-    def _get_ensemble_data(self) -> dict:
+    def _get_ensemble_data(self) -> dict[str, float]:
         """Extend the standard ensemble-data dict with per-move acceptance.
 
         Adds one ``<move_name>_acceptance_rate`` key per registered move,
