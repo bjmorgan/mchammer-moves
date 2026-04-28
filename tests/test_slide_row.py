@@ -19,7 +19,7 @@ from unittest.mock import MagicMock
 import numpy as np
 import pytest
 
-from mchammer_moves import CustomCanonicalEnsemble, SlideRow
+from mchammer_moves import SlideRow
 
 
 def _make_fake_configuration(occupations: list[int]):
@@ -45,21 +45,6 @@ def test_slide_row_plus_one_shifts_pattern_forward():
     config = _make_fake_configuration(occupations)
 
     move = SlideRow(rows=[row])
-    random.seed(0)
-    # Force direction = +1 by patching random.choice.
-    sites, species = None, None
-    for _ in range(100):
-        random.seed(0)  # produces direction = -1 sometimes; loop until +1
-        sites_try, species_try = move.propose(config)
-        # Detect direction from the result
-        if species_try == [103, 100, 101, 102]:
-            sites, species = sites_try, species_try
-            break
-        if species_try == [101, 102, 103, 100]:
-            continue
-        random.seed(random.randint(0, 1_000_000))
-    # Bypass the loop's reliance on RNG by checking both possibilities
-    random.seed(0)
     results = set()
     for seed in range(50):
         random.seed(seed)
@@ -163,7 +148,7 @@ def test_slide_row_detailed_balance_on_chain():
         for _ in range(n_per):
             sites, species = move.propose(config)
             cand = list(config.occupations)
-            for s, z in zip(sites, species):
+            for s, z in zip(sites, species, strict=True):
                 cand[s] = z
             dst = from_atomic(cand)
             transitions[state_index[src], state_index[dst]] += 1
@@ -196,4 +181,6 @@ def test_slide_row_detailed_balance_on_chain():
     # uniform, so the diagonal should be small. Just confirm proposals
     # actually move the system most of the time.
     diag_frac = np.trace(transitions) / transitions.sum()
-    assert diag_frac < 0.5, f"Most slides should change state, got diag_frac={diag_frac}"
+    assert diag_frac < 0.5, (
+        f"Most slides should change state, got diag_frac={diag_frac}"
+    )

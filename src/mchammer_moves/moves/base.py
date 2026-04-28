@@ -6,7 +6,9 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from mchammer.configuration_manager import ConfigurationManager
+    from mchammer.configuration_manager import (  # type: ignore[import-untyped]
+        ConfigurationManager,
+    )
 
 
 class Move(ABC):
@@ -36,7 +38,7 @@ class Move(ABC):
 
     @abstractmethod
     def propose(
-        self, configuration: "ConfigurationManager"
+        self, configuration: ConfigurationManager
     ) -> tuple[list[int], list[int]] | None:
         """Propose a trial move from the current configuration.
 

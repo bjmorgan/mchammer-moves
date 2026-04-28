@@ -8,19 +8,51 @@ version = "0.1.0"
 description = "Custom Monte Carlo moves for icet/mchammer."
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "MIT" }
-authors = [{ name = "Benjamin Morgan" }]
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Benjamin J. Morgan", email = "b.j.morgan@bath.ac.uk" }]
 dependencies = [
     "icet>=2.0",
     "numpy",
     "ase",
 ]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Operating System :: OS Independent",
+    "Topic :: Scientific/Engineering",
+]
 
 [project.optional-dependencies]
-test = ["pytest>=7", "scipy"]
+dev = ["pytest>=7", "scipy", "mypy", "ruff"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.mypy]
+python_version = "3.11"
+packages = ["mchammer_moves"]
+strict = true
+warn_return_any = false
+
+# pt_adapter.py is the legacy Replica-shaped wrapper around
+# CustomCanonicalEnsemble that pre-dates mchammer-pt's
+# `ensemble_cls=` API. Scheduled for removal in the migration to
+# mchammer-pt v0.2; type-checking it strictly is not worth the
+# retrofit effort.
+[[tool.mypy.overrides]]
+module = "mchammer_moves.pt_adapter"
+ignore_errors = true
+
+[tool.ruff]
+target-version = "py311"
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]

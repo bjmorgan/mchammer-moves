@@ -27,10 +27,8 @@ def test_custom_replica_quacks_like_replica(small_ising_setup):
     )
     # Required attributes
     assert isinstance(replica.temperature, float)
-    e0 = replica.current_energy()
     occ0 = replica.current_occupations()
     replica.advance(50)
-    e1 = replica.current_energy()
     occ1 = replica.current_occupations()
     assert occ0.shape == occ1.shape
     # set_occupations round-trip
@@ -40,7 +38,7 @@ def test_custom_replica_quacks_like_replica(small_ising_setup):
 
 def test_make_serial_pool_drives_parallel_tempering(small_ising_setup):
     """End-to-end: build a pool, hand it to PT, run a few cycles."""
-    mchammer_pt = pytest.importorskip("mchammer_pt")
+    pytest.importorskip("mchammer_pt")
     from mchammer_pt import CanonicalParallelTempering
 
     from mchammer_moves.pt_adapter import make_serial_pool

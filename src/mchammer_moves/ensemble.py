@@ -8,14 +8,16 @@ from typing import TYPE_CHECKING
 
 from ase import Atoms
 from ase.units import kB
-from mchammer.calculators.base_calculator import BaseCalculator
-from mchammer.ensembles import CanonicalEnsemble
+from mchammer.calculators.base_calculator import (  # type: ignore[import-untyped]
+    BaseCalculator,
+)
+from mchammer.ensembles import CanonicalEnsemble  # type: ignore[import-untyped]
 
 if TYPE_CHECKING:
     from mchammer_moves.moves.base import Move
 
 
-class CustomCanonicalEnsemble(CanonicalEnsemble):
+class CustomCanonicalEnsemble(CanonicalEnsemble):  # type: ignore[misc]
     """Canonical ensemble parameterised by an arbitrary list of moves.
 
     Drop-in replacement for :class:`mchammer.ensembles.CanonicalEnsemble`
@@ -64,7 +66,7 @@ class CustomCanonicalEnsemble(CanonicalEnsemble):
         structure: Atoms,
         calculator: BaseCalculator,
         temperature: float,
-        moves: list[tuple["Move", float]],
+        moves: list[tuple[Move, float]],
         user_tag: str | None = None,
         boltzmann_constant: float = kB,
         random_seed: int | None = None,
@@ -108,8 +110,8 @@ class CustomCanonicalEnsemble(CanonicalEnsemble):
 
         self._moves: list[Move] = [m for m, _ in moves]
         self._move_weights: list[float] = [float(w) for _, w in moves]
-        self._move_accept_counts: Counter = Counter()
-        self._move_reject_counts: Counter = Counter()
+        self._move_accept_counts: Counter[str] = Counter()
+        self._move_reject_counts: Counter[str] = Counter()
 
         names = [m.name for m in self._moves]
         if len(set(names)) != len(names):
@@ -118,7 +120,7 @@ class CustomCanonicalEnsemble(CanonicalEnsemble):
             )
 
     @property
-    def moves(self) -> list["Move"]:
+    def moves(self) -> list[Move]:
         """The moves registered with the ensemble (read-only view)."""
         return list(self._moves)
 

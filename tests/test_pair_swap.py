@@ -11,7 +11,6 @@ mchammer's stock :class:`CanonicalEnsemble`.
 from __future__ import annotations
 
 import random
-from collections import Counter
 from itertools import combinations
 
 import numpy as np
@@ -98,7 +97,7 @@ def test_pair_swap_detailed_balance(small_ising_setup):
 
     def to_full_occ(local_state: tuple[int, ...]) -> list[int]:
         occ = list(base_occ)
-        for site, bit in zip(varied_sites, local_state):
+        for site, bit in zip(varied_sites, local_state, strict=True):
             occ[site] = species_b if bit == 1 else species_a
         return occ
 
@@ -123,7 +122,7 @@ def test_pair_swap_detailed_balance(small_ising_setup):
             sites, species = move.propose(ensemble.configuration)
             # Build the candidate full occupation
             cand = list(ensemble.configuration.occupations)
-            for s, z in zip(sites, species):
+            for s, z in zip(sites, species, strict=True):
                 cand[s] = z
             cand_local = project_to_local(cand)
             # Did the swap stay within our 4-site subspace?

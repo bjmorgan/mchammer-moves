@@ -17,7 +17,9 @@ from typing import TYPE_CHECKING
 from mchammer_moves.moves.base import Move
 
 if TYPE_CHECKING:
-    from mchammer.configuration_manager import ConfigurationManager
+    from mchammer.configuration_manager import (  # type: ignore[import-untyped]
+        ConfigurationManager,
+    )
 
 
 class SlideRow(Move):
@@ -79,7 +81,7 @@ class SlideRow(Move):
         return len(self._rows)
 
     def propose(
-        self, configuration: "ConfigurationManager"
+        self, configuration: ConfigurationManager
     ) -> tuple[list[int], list[int]] | None:
         """Propose a single-step slide along one row.
 

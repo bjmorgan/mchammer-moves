@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from mchammer.configuration_manager import SwapNotPossibleError
+from mchammer.configuration_manager import (  # type: ignore[import-untyped]
+    SwapNotPossibleError,
+)
 
 from mchammer_moves.moves.base import Move
 
@@ -55,7 +57,7 @@ class PairSwap(Move):
         self.allowed_sites = allowed_sites
 
     def propose(
-        self, configuration: "ConfigurationManager"
+        self, configuration: ConfigurationManager
     ) -> tuple[list[int], list[int]] | None:
         """Propose a swap of two sites with differing species."""
         try:

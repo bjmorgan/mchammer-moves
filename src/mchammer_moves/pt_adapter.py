@@ -67,7 +67,7 @@ class CustomReplica:
         cluster_expansion: ClusterExpansion,
         atoms: Atoms,
         temperature: float,
-        moves: list[tuple["Move", float]],
+        moves: list[tuple[Move, float]],
         random_seed: int,
     ) -> None:
         self._temperature = float(temperature)
@@ -131,7 +131,7 @@ def make_serial_pool(
     cluster_expansion: ClusterExpansion,
     atoms: Atoms,
     temperatures: Sequence[float],
-    moves: list[tuple["Move", float]],
+    moves: list[tuple[Move, float]],
     random_seed: int,
 ):
     """Build a ``SerialPool`` of :class:`CustomReplica` instances.

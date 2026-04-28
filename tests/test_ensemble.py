@@ -88,7 +88,6 @@ def test_weight_based_dispatch(small_ising_setup):
     assert rates["swap_a"]["proposed"] + rates["swap_b"]["proposed"] == n
 
     expected_a = n * 4 / 5
-    expected_b = n * 1 / 5
     se = np.sqrt(n * (4 / 5) * (1 / 5))
     z_a = abs(rates["swap_a"]["proposed"] - expected_a) / se
     assert z_a < 4.0, (
