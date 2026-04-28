@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mchammer_moves"
+version = "0.1.0"
+description = "Custom Monte Carlo moves for icet/mchammer."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Benjamin Morgan" }]
+dependencies = [
+    "icet>=2.0",
+    "numpy",
+    "ase",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=7", "scipy"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
