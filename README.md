@@ -20,6 +20,13 @@ Installation (editable):
 pip install -e .
 ```
 
+To use the parallel-tempering integration, install the `pt` extra
+(pulls `mchammer-pt` v0.2.0 from GitHub until it is on PyPI):
+
+```bash
+pip install -e ".[pt]"
+```
+
 ## Quick start
 
 ```python
@@ -124,6 +131,6 @@ thing you run when adding a new move.
 ## Running tests
 
 ```bash
-pip install -e ".[test]"
-pytest -v
+pip install -e ".[dev]"
+pytest -q
 ```
