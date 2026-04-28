@@ -69,6 +69,7 @@ class CyclicShift(Move):
     ) -> None:
         if not cycles:
             raise ValueError("`cycles` must contain at least one cycle.")
+        seen: set[int] = set()
         for c, cycle in enumerate(cycles):
             if len(cycle) == 0:
                 raise ValueError(f"Cycle {c} is empty.")
@@ -77,12 +78,30 @@ class CyclicShift(Move):
                     f"Cycle {c} has length 1; a shift on a single-site cycle "
                     "is the identity and not a useful move."
                 )
+            if len(set(cycle)) != len(cycle):
+                raise ValueError(
+                    f"Cycle {c} contains duplicate site indices ({cycle}); "
+                    "a shift would propose multiple species values for the "
+                    "duplicated site."
+                )
+            overlap = seen & set(cycle)
+            if overlap:
+                raise ValueError(
+                    f"Cycle {c} shares site(s) {sorted(overlap)} with an "
+                    "earlier cycle; overlapping cycles silently over-sample "
+                    "shared sites. Likely a chain-construction bug."
+                )
+            seen.update(cycle)
         self.name = name
         self._cycles: list[tuple[int, ...]] = [tuple(c) for c in cycles]
 
     @property
     def cycles(self) -> list[tuple[int, ...]]:
-        """Read-only view of the configured cycles."""
+        """Copy of the configured cycles.
+
+        Mutating the returned list does not affect the move's internal
+        cycle list.
+        """
         return list(self._cycles)
 
     @property
@@ -98,12 +117,8 @@ class CyclicShift(Move):
         """Propose a single-step shift along one cycle.
 
         Returns all sites in the chosen cycle together with the species
-        they would carry after the shift. Sites whose species are
-        unchanged by the shift (e.g., where a neighbour happens to
-        share the same species) are still included — including them
-        keeps the proposal characterised purely by ``(cycle,
-        direction)``, which is what the detailed-balance argument
-        requires.
+        they would carry after the shift, including any sites whose
+        species are unchanged by the shift.
         """
         # Uniform [0, n) integer; the floating-point bias is negligible
         # for n far below 2^52, which holds for any realistic cycle count.

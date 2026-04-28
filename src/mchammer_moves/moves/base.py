@@ -22,12 +22,15 @@ class Move(ABC):
     machinery.
 
     Detailed balance under standard Metropolis acceptance requires that
-    the probability of proposing any specific (sites, species) change
-    depends only on lattice geometry and the move definition — not on
-    the current configuration. Subclasses must guarantee this by
-    construction. For example, the canonical pair swap satisfies this
-    because, for fixed composition, the number of distinct-species pairs
-    on a sublattice is composition-invariant.
+    the forward and reverse proposal probabilities are equal for every
+    pair of states the move connects. The simplest way to guarantee
+    this is to make proposal probabilities depend only on lattice
+    geometry, not on the current configuration — for example, the
+    canonical pair swap (where, for fixed composition, the number of
+    distinct-species pairs on a sublattice is composition-invariant).
+    Symmetric state-dependent proposal probabilities are also fine;
+    only asymmetric ones break the contract and require a
+    proposal-ratio correction in the acceptance criterion.
 
     Attributes
     ----------

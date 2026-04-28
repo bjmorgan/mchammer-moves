@@ -35,8 +35,8 @@ def test_per_move_counts_match_trial_step_returns(small_ising_setup):
         expected_accepted += ensemble._do_trial_step()
 
     rates = ensemble.acceptance_rates()
-    total_proposed = sum(r["proposed"] for r in rates.values())
-    total_accepted = sum(r["accepted"] for r in rates.values())
+    total_proposed = sum(r.proposed for r in rates.values())
+    total_accepted = sum(r.accepted for r in rates.values())
     assert total_proposed == n
     assert total_accepted == expected_accepted
 
@@ -61,7 +61,7 @@ def test_run_preserves_global_step_count(small_ising_setup):
     ensemble.run(n)
     assert ensemble._step == initial_step + n
     rates = ensemble.acceptance_rates()
-    assert sum(r["proposed"] for r in rates.values()) == n
+    assert sum(r.proposed for r in rates.values()) == n
 
 
 def test_weight_based_dispatch(small_ising_setup):
@@ -85,11 +85,11 @@ def test_weight_based_dispatch(small_ising_setup):
     for _ in range(n):
         ensemble._do_trial_step()
     rates = ensemble.acceptance_rates()
-    assert rates["swap_a"]["proposed"] + rates["swap_b"]["proposed"] == n
+    assert rates["swap_a"].proposed + rates["swap_b"].proposed == n
 
     expected_a = n * 4 / 5
     se = np.sqrt(n * (4 / 5) * (1 / 5))
-    z_a = abs(rates["swap_a"]["proposed"] - expected_a) / se
+    z_a = abs(rates["swap_a"].proposed - expected_a) / se
     assert z_a < 4.0, (
         f"Weight dispatch off: swap_a proposed {rates['swap_a']['proposed']}, "
         f"expected ~{expected_a}, z={z_a:.2f}"
@@ -108,12 +108,12 @@ def test_reset_acceptance_counts(small_ising_setup):
     )
     ensemble.run(500)
     rates_before = ensemble.acceptance_rates()
-    assert rates_before["pair_swap"]["proposed"] == 500
+    assert rates_before["pair_swap"].proposed == 500
     global_step_before = ensemble._step
 
     ensemble.reset_acceptance_counts()
     rates_after = ensemble.acceptance_rates()
-    assert rates_after["pair_swap"]["proposed"] == 0
+    assert rates_after["pair_swap"].proposed == 0
     # The inherited cumulative step counter must NOT be reset
     assert ensemble._step == global_step_before
 
@@ -178,10 +178,10 @@ def test_combined_pair_swap_and_cyclic_shift_runs(small_ising_setup):
         ensemble._do_trial_step()
     rates = ensemble.acceptance_rates()
     assert set(rates.keys()) == {"pair_swap", "cyclic_shift"}
-    assert rates["pair_swap"]["proposed"] + rates["cyclic_shift"]["proposed"] == n
+    assert rates["pair_swap"].proposed + rates["cyclic_shift"].proposed == n
     # Both moves should have non-zero proposal counts
-    assert rates["pair_swap"]["proposed"] > 0
-    assert rates["cyclic_shift"]["proposed"] > 0
+    assert rates["pair_swap"].proposed > 0
+    assert rates["cyclic_shift"].proposed > 0
 
 
 def test_per_move_acceptance_propagates_to_data_container(small_ising_setup):
@@ -214,8 +214,8 @@ def test_per_move_acceptance_propagates_to_data_container(small_ising_setup):
     rates = ensemble.acceptance_rates()
     final_swap_a = float(df["swap_a_acceptance_rate"].iloc[-1])
     final_swap_b = float(df["swap_b_acceptance_rate"].iloc[-1])
-    assert final_swap_a == pytest.approx(rates["swap_a"]["acceptance_rate"])
-    assert final_swap_b == pytest.approx(rates["swap_b"]["acceptance_rate"])
+    assert final_swap_a == pytest.approx(rates["swap_a"].acceptance_rate)
+    assert final_swap_b == pytest.approx(rates["swap_b"].acceptance_rate)
 
 
 def test_run_method_inherited(small_ising_setup):
@@ -235,4 +235,4 @@ def test_run_method_inherited(small_ising_setup):
     n = 500
     ensemble.run(n)
     rates = ensemble.acceptance_rates()
-    assert rates["pair_swap"]["proposed"] == n
+    assert rates["pair_swap"].proposed == n

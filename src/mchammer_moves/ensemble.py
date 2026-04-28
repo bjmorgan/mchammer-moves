@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import Counter
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from ase import Atoms
@@ -16,6 +17,39 @@ if TYPE_CHECKING:
     from mchammer_moves.moves.base import Move
 
 
+@dataclass(frozen=True)
+class MoveStats:
+    """Per-move acceptance statistics returned by `acceptance_rates`.
+
+    Carries the ``proposed = accepted + rejected`` invariant by
+    construction (computed from the two stored counters rather than
+    stored independently). The acceptance rate is similarly computed.
+
+    Args:
+        accepted: Number of proposals accepted by the Metropolis
+            criterion.
+        rejected: Number of proposals rejected. Includes both
+            energy-rejected (Metropolis) and null-proposed cases
+            (e.g., a `PairSwap` returning ``None`` because no
+            distinct-species pair existed); the two are conflated
+            because mchammer's own ``acceptance_ratio`` convention
+            does not distinguish them.
+    """
+
+    accepted: int
+    rejected: int
+
+    @property
+    def proposed(self) -> int:
+        """Total number of proposals (``accepted + rejected``)."""
+        return self.accepted + self.rejected
+
+    @property
+    def acceptance_rate(self) -> float:
+        """Fraction of proposals accepted; ``0.0`` if no proposals."""
+        return self.accepted / self.proposed if self.proposed > 0 else 0.0
+
+
 class CustomCanonicalEnsemble(CanonicalEnsemble):  # type: ignore[misc]
     """Canonical ensemble parameterised by an arbitrary list of moves.
 
@@ -26,11 +60,13 @@ class CustomCanonicalEnsemble(CanonicalEnsemble):  # type: ignore[misc]
     standard ensemble machinery — :meth:`_get_property_change`,
     :meth:`_acceptance_condition`, and :meth:`update_occupations` — so
     that detailed balance with Metropolis acceptance is preserved
-    provided the move's proposal probabilities are state-independent.
+    provided each move's forward and reverse proposal probabilities are
+    equal. (State-independent proposal probabilities are sufficient for
+    this; symmetric state-dependent probabilities also satisfy it.)
 
     The public interface inherited from ``CanonicalEnsemble`` is left
-    intact, so external orchestrators (notably ``mchammer_pt``) can use
-    this ensemble without modification.
+    intact, so external orchestrators that accept a `CanonicalEnsemble`
+    extension point can use this ensemble without modification.
 
     Parameters
     ----------
@@ -121,7 +157,7 @@ class CustomCanonicalEnsemble(CanonicalEnsemble):  # type: ignore[misc]
 
     @property
     def moves(self) -> list[Move]:
-        """The moves registered with the ensemble (read-only view)."""
+        """Copy of the moves registered with the ensemble."""
         return list(self._moves)
 
     @property
@@ -134,9 +170,16 @@ class CustomCanonicalEnsemble(CanonicalEnsemble):  # type: ignore[misc]
 
         Picks a move by weight, asks it for a proposal, evaluates the
         energy change with :meth:`_get_property_change`, and applies
-        Metropolis acceptance. Per-move accept/reject counts are updated;
-        the integer return value (0 or 1) feeds the inherited global
-        counters in :class:`BaseEnsemble`.
+        Metropolis acceptance. Per-move accept/reject counts are
+        updated; the integer return value (0 or 1) feeds the inherited
+        global counters in :class:`BaseEnsemble`.
+
+        If the move returns ``None`` (a null proposal — e.g., a
+        :class:`PairSwap` on a sublattice with no distinct-species
+        sites), no energy evaluation is performed and the step is
+        counted as a rejection on the move's per-move counter, matching
+        mchammer's `acceptance_ratio` convention of not distinguishing
+        rejection reasons.
 
         Move selection and the move's own randomness both draw from
         :meth:`_next_random_number`, so the entire trial-step sequence
@@ -171,29 +214,15 @@ class CustomCanonicalEnsemble(CanonicalEnsemble):  # type: ignore[misc]
         # cumulative sum. Fall through to the last move.
         return self._moves[-1]
 
-    def acceptance_rates(self) -> dict[str, dict[str, float | int]]:
-        """Return per-move acceptance statistics.
-
-        Returns
-        -------
-        dict[str, dict]
-            Mapping from move name to a dictionary with keys
-            ``accepted``, ``rejected``, ``proposed`` (sum of the two),
-            and ``acceptance_rate`` (``accepted / proposed`` or 0 if no
-            proposals have been made).
-        """
-        stats: dict[str, dict[str, float | int]] = {}
-        for move in self._moves:
-            accepted = self._move_accept_counts[move.name]
-            rejected = self._move_reject_counts[move.name]
-            proposed = accepted + rejected
-            stats[move.name] = {
-                "accepted": accepted,
-                "rejected": rejected,
-                "proposed": proposed,
-                "acceptance_rate": accepted / proposed if proposed > 0 else 0.0,
-            }
-        return stats
+    def acceptance_rates(self) -> dict[str, MoveStats]:
+        """Return per-move acceptance statistics, keyed by move name."""
+        return {
+            move.name: MoveStats(
+                accepted=self._move_accept_counts[move.name],
+                rejected=self._move_reject_counts[move.name],
+            )
+            for move in self._moves
+        }
 
     def _get_ensemble_data(self) -> dict[str, float]:
         """Extend the standard ensemble-data dict with per-move acceptance.

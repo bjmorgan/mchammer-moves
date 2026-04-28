@@ -121,6 +121,69 @@ def test_cyclic_shift_rejects_empty_cycles():
         CyclicShift(cycles=[[0]])
 
 
+def test_cyclic_shift_rejects_within_cycle_duplicate_sites():
+    """A cycle with a repeated index would propose multiple species
+    values for the duplicated site — caught up-front rather than
+    producing undefined behaviour at `update_occupations`.
+    """
+    with pytest.raises(ValueError, match="duplicate site indices"):
+        CyclicShift(cycles=[[3, 5, 3]])
+
+
+def test_cyclic_shift_rejects_overlapping_cycles():
+    """Cycles that share sites silently over-sample the shared sites.
+
+    The likely real-world cause is a chain-construction bug (e.g. an
+    off-by-one in a meshgrid) producing two cycles that contain the
+    same global index. Caught at the constructor.
+    """
+    with pytest.raises(ValueError, match="shares site"):
+        CyclicShift(cycles=[[0, 1, 2], [2, 3, 4]])
+
+
+def test_cyclic_shift_dispatches_across_multiple_cycles():
+    """Both cycles must be reachable, and a slide on one cycle must
+    not mutate sites in the other cycle.
+
+    Two cycles of different lengths are configured; many proposals
+    are drawn and we assert (a) each cycle is selected at least
+    once with high probability, (b) every proposal touches only sites
+    of one cycle, and (c) the species values produced are consistent
+    with the chosen cycle's length-specific wrap.
+    """
+    cycle_a = [0, 1, 2]      # length 3
+    cycle_b = [10, 11, 12, 13, 14]  # length 5
+    occupations = [0] * 20
+    for i, idx in enumerate(cycle_a):
+        occupations[idx] = 100 + i
+    for i, idx in enumerate(cycle_b):
+        occupations[idx] = 200 + i
+    config = _make_fake_configuration(occupations)
+    move = CyclicShift(cycles=[cycle_a, cycle_b])
+
+    seen_a = 0
+    seen_b = 0
+    for seed in range(400):
+        sites, species = move.propose(config, seeded_uniform(seed))
+        sites_set = set(sites)
+        if sites_set == set(cycle_a):
+            seen_a += 1
+            assert len(species) == len(cycle_a)
+            # Species values must be a cyclic permutation of cycle_a's species.
+            assert set(species) == {100, 101, 102}
+        elif sites_set == set(cycle_b):
+            seen_b += 1
+            assert len(species) == len(cycle_b)
+            assert set(species) == {200, 201, 202, 203, 204}
+        else:
+            raise AssertionError(
+                f"Proposal sites {sites} match neither cycle"
+            )
+    assert seen_a > 0 and seen_b > 0, (
+        f"Both cycles must be reachable; got seen_a={seen_a}, seen_b={seen_b}"
+    )
+
+
 def test_cyclic_shift_detailed_balance_on_chain():
     """Detailed balance for CyclicShift on a single 6-site chain.
 

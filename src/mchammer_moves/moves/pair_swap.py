@@ -52,6 +52,13 @@ class PairSwap(Move):
         allowed_species: list[int] | None = None,
         allowed_sites: list[int] | None = None,
     ) -> None:
+        if sublattice_index < 0:
+            raise ValueError(
+                f"sublattice_index must be non-negative; got {sublattice_index}. "
+                "mchammer's `Sublattices` indexes positively from 0; negative "
+                "values silently end-index into the sublattice list and "
+                "produce a working but wrong sublattice."
+            )
         self.name = name
         self.sublattice_index = sublattice_index
         self.allowed_species = allowed_species
