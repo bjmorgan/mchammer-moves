@@ -17,7 +17,15 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-test = ["pytest>=7", "scipy"]
+# `mchammer-pt` is an optional integration dependency: importing
+# `mchammer_moves` itself does not require it, but consuming
+# `CustomCanonicalEnsemble` through parallel tempering does. The
+# integration uses `mchammer-pt`'s native `ensemble_cls=` /
+# `ensemble_kwargs=` API (mchammer-pt v0.2+); the public
+# `mchammer_pt.testing.assert_boltzmann_sampling` utility is used by
+# the combined-kernel detailed-balance test in this package.
+pt = ["mchammer-pt"]
+test = ["pytest>=7", "scipy", "mchammer-pt"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
