@@ -17,3 +17,4 @@ htmlcov/
 *.h5
 docs/superpowers/
 .DS_Store
+CLAUDE.md
