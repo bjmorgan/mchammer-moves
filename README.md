@@ -1,8 +1,8 @@
-# mchammer_moves
+# mchammer-moves
 
 Custom Monte Carlo trial moves for [icet/mchammer](https://icet.materialsmodeling.org/),
 designed to slot into existing canonical sampling without modification of the
-mchammer source or downstream wrappers such as `mchammer_pt`.
+mchammer source or downstream wrappers such as `mchammer-pt`.
 
 The package provides:
 
@@ -42,51 +42,43 @@ ensemble.run(10_000)
 print(ensemble.acceptance_rates())
 ```
 
-## Use with `mchammer_pt`
+## Use with `mchammer-pt`
 
-`mchammer_pt.replica.Replica` constructs an `mchammer.CanonicalEnsemble`
-internally, so `CustomCanonicalEnsemble` cannot be passed directly to
-`CanonicalParallelTempering` via its `atoms`/`temperatures` route.
-However, `CanonicalParallelTempering` accepts an arbitrary `pool=`
-argument satisfying the `ReplicaPool` protocol, which is the supported
-extension point for custom replica state.
-
-The `mchammer_moves.pt_adapter` module supplies the glue:
+`mchammer-pt` (v0.2+) accepts a custom ensemble class via its native
+`ensemble_cls=` parameter, with constructor arguments forwarded via
+`ensemble_kwargs=`:
 
 ```python
 from mchammer_pt import CanonicalParallelTempering
-from mchammer_moves import PairSwap, SlideRow
-from mchammer_moves.pt_adapter import make_serial_pool
+from mchammer_moves import CustomCanonicalEnsemble, PairSwap, SlideRow
 
-pool = make_serial_pool(
-    cluster_expansion=ce,
-    atoms=initial_structure,
-    temperatures=temperatures,
-    moves=[
-        (PairSwap(sublattice_index=anion_sl), 1.0),
-        (SlideRow(rows=rows), 0.05),
-    ],
-    random_seed=42,
-)
-pt = CanonicalParallelTempering(
+with CanonicalParallelTempering.process_pool(
     cluster_expansion=ce,
     atoms=initial_structure,
     temperatures=temperatures,
     block_size=block_size,
     random_seed=42,
-    pool=pool,
-)
-history = pt.run(n_cycles=N_CYCLES)
-
-# Per-move acceptance per replica:
-for r, replica in enumerate(pool._replicas):
-    print(replica.temperature, replica.ensemble.acceptance_rates())
+    ensemble_cls=CustomCanonicalEnsemble,
+    ensemble_kwargs={
+        "moves": [
+            (PairSwap(sublattice_index=anion_sl), 1.0),
+            (SlideRow(rows=rows), 0.05),
+        ],
+    },
+) as pt:
+    history = pt.run(n_cycles=N_CYCLES)
 ```
 
-`make_serial_pool` mirrors the per-replica seeding used by
-`CanonicalParallelTempering` itself, so the resulting pool behaves
-identically to the wrapper's default `SerialPool` apart from the choice
-of ensemble class.
+Per-move acceptance is recorded into each replica's
+`mchammer.BaseDataContainer` at every `ensemble_data_write_interval`,
+so it survives the `ProcessPool` boundary and is recoverable from the
+HDF5 bundle written by `mchammer-pt` without observer forwarding.
+
+For multiprocess runs, `CustomCanonicalEnsemble` and every `Move`
+subclass must be importable by fully qualified name in spawn workers
+(i.e. defined in `.py` module files, not in `__main__` or notebook
+cells). `mchammer-pt`'s `ProcessPool` rejects interactive-`__main__`
+and function-local classes up-front.
 
 ## Constructing rows for `SlideRow`
 
