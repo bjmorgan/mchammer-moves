@@ -18,6 +18,7 @@ import pytest
 from mchammer.ensembles import CanonicalEnsemble
 
 from mchammer_moves import CustomCanonicalEnsemble, PairSwap
+from tests.conftest import seeded_uniform
 
 
 def _enumerate_canonical_states(n_sites: int, n_minority: int) -> list[tuple[int, ...]]:
@@ -53,7 +54,7 @@ def test_pair_swap_propose_returns_swap(small_ising_setup):
     )
     occ_before = list(ensemble.configuration.occupations)
     move = PairSwap(sublattice_index=0)
-    sites, species = move.propose(ensemble.configuration)
+    sites, species = move.propose(ensemble.configuration, seeded_uniform(0))
     assert len(sites) == 2
     assert len(species) == 2
     i, j = sites
@@ -119,7 +120,10 @@ def test_pair_swap_detailed_balance(small_ising_setup):
             current_local = project_to_local(list(ensemble.configuration.occupations))
             if current_local != src_local:
                 _set_occupations(ensemble, to_full_occ(src_local))
-            sites, species = move.propose(ensemble.configuration)
+            # PairSwap.propose ignores the callable and delegates to
+            # mchammer's `get_swapped_state`, which draws from the
+            # global random module seeded above.
+            sites, species = move.propose(ensemble.configuration, seeded_uniform(0))
             # Build the candidate full occupation
             cand = list(ensemble.configuration.occupations)
             for s, z in zip(sites, species, strict=True):
@@ -256,6 +260,44 @@ def test_pair_swap_acceptance_rate_reasonable(small_ising_setup):
         ensemble._do_trial_step()
     rates = ensemble.acceptance_rates()
     assert "pair_swap" in rates
-    assert rates["pair_swap"]["proposed"] == n
-    rate = rates["pair_swap"]["acceptance_rate"]
+    assert rates["pair_swap"].proposed == n
+    rate = rates["pair_swap"].acceptance_rate
     assert 0.05 < rate < 0.99, f"Implausible acceptance rate: {rate}"
+
+
+def test_pair_swap_rejects_negative_sublattice_index():
+    """Negative `sublattice_index` is rejected at construction.
+
+    mchammer's `Sublattices` is list-indexed; passing -1 silently
+    refers to the last sublattice rather than producing an error,
+    which lets a copy-pasted `sublattice_index=-1` from numpy code
+    masquerade as a working configuration.
+    """
+    with pytest.raises(ValueError, match="non-negative"):
+        PairSwap(sublattice_index=-1)
+
+
+def test_pair_swap_returns_none_when_no_swap_is_possible(small_ising_setup):
+    """`propose` returns `None` when the configuration manager has no
+    distinct-species pair to swap on the chosen sublattice.
+
+    Achieved here by forcing the ensemble's configuration to a single-
+    species occupation, which makes `get_swapped_state` raise
+    `SwapNotPossibleError`. The move catches that exception and
+    returns `None`; `_do_trial_step` increments the rejection counter
+    without an energy evaluation.
+    """
+    setup = small_ising_setup
+    ensemble = CustomCanonicalEnsemble(
+        structure=setup["structure"],
+        calculator=setup["calculator"],
+        temperature=1000.0,
+        moves=[(PairSwap(sublattice_index=0), 1.0)],
+        random_seed=0,
+    )
+    n = len(ensemble.configuration.occupations)
+    only_au = [79] * n  # Au everywhere → no Ag/Au pair exists
+    ensemble.update_occupations(list(range(n)), only_au)
+    move = PairSwap(sublattice_index=0)
+    proposal = move.propose(ensemble.configuration, seeded_uniform(0))
+    assert proposal is None

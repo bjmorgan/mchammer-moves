@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -21,24 +22,46 @@ class Move(ABC):
     machinery.
 
     Detailed balance under standard Metropolis acceptance requires that
-    the probability of proposing any specific (sites, species) change
-    depends only on lattice geometry and the move definition — not on
-    the current configuration. Subclasses must guarantee this by
-    construction. For example, the canonical pair swap satisfies this
-    because, for fixed composition, the number of distinct-species pairs
-    on a sublattice is composition-invariant.
+    the forward and reverse proposal probabilities are equal for every
+    pair of states the move connects. The simplest way to guarantee
+    this is to make proposal probabilities depend only on lattice
+    geometry, not on the current configuration — for example, the
+    canonical pair swap (where, for fixed composition, the number of
+    distinct-species pairs on a sublattice is composition-invariant).
+    Symmetric state-dependent proposal probabilities are also fine;
+    only asymmetric ones break the contract and require a
+    proposal-ratio correction in the acceptance criterion.
 
     Attributes
     ----------
     name
         Human-readable identifier used for per-move acceptance tracking.
+
+    Notes
+    -----
+    For multiprocess parallel tempering, every concrete `Move`
+    subclass must be importable by fully qualified name in the spawn
+    workers — i.e. defined in a ``.py`` module file, not in a Jupyter
+    cell or a function body. ``mchammer_pt.ProcessPool`` rejects
+    interactive-``__main__`` and function-local classes up-front.
     """
 
     name: str
 
+    def __init__(self, name: str) -> None:
+        """Store the move's identifier.
+
+        Subclasses should call ``super().__init__(name)`` to set
+        ``self.name``; without it, attribute access on `name` raises
+        ``AttributeError`` lazily at first use.
+        """
+        self.name = name
+
     @abstractmethod
     def propose(
-        self, configuration: ConfigurationManager
+        self,
+        configuration: ConfigurationManager,
+        next_random_number: Callable[[], float],
     ) -> tuple[list[int], list[int]] | None:
         """Propose a trial move from the current configuration.
 
@@ -48,6 +71,13 @@ class Move(ABC):
             The current ensemble configuration. Subclasses should treat
             this as read-only — committing the move is the ensemble's
             responsibility.
+        next_random_number
+            Zero-argument callable returning a uniform float in
+            ``[0, 1)``. Subclasses requiring randomness should draw
+            from this callable rather than Python's global ``random``
+            module so that the move's randomness is tied to the
+            ensemble's seeded RNG stream and remains reproducible
+            under per-replica RNG isolation.
 
         Returns
         -------

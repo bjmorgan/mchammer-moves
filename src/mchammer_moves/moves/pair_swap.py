@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from mchammer.configuration_manager import (  # type: ignore[import-untyped]
@@ -51,15 +52,33 @@ class PairSwap(Move):
         allowed_species: list[int] | None = None,
         allowed_sites: list[int] | None = None,
     ) -> None:
-        self.name = name
+        if sublattice_index < 0:
+            raise ValueError(
+                f"sublattice_index must be non-negative; got {sublattice_index}. "
+                "mchammer's `Sublattices` indexes positively from 0; negative "
+                "values silently end-index into the sublattice list and "
+                "produce a working but wrong sublattice."
+            )
+        super().__init__(name)
         self.sublattice_index = sublattice_index
         self.allowed_species = allowed_species
         self.allowed_sites = allowed_sites
 
     def propose(
-        self, configuration: ConfigurationManager
+        self,
+        configuration: ConfigurationManager,
+        next_random_number: Callable[[], float],
     ) -> tuple[list[int], list[int]] | None:
-        """Propose a swap of two sites with differing species."""
+        """Propose a swap of two sites with differing species.
+
+        Selection is delegated to
+        ``ConfigurationManager.get_swapped_state``, which draws from
+        mchammer's seeded ``random`` module — the same stream that
+        backs ``next_random_number`` in a `CustomCanonicalEnsemble`
+        context. The ``next_random_number`` argument is therefore
+        unused here.
+        """
+        del next_random_number  # Stream-shared with mchammer's RNG; see docstring.
         try:
             sites, species = configuration.get_swapped_state(
                 sublattice_index=self.sublattice_index,

@@ -8,10 +8,25 @@ energy landscape suitable for exercising sampling correctness.
 
 from __future__ import annotations
 
+import random
+from collections.abc import Callable
+
 import pytest
 from ase.build import bulk
 from icet import ClusterExpansion, ClusterSpace
 from mchammer.calculators import ClusterExpansionCalculator
+
+
+def seeded_uniform(seed: int) -> Callable[[], float]:
+    """Return a deterministic ``next_random_number``-style callable.
+
+    Wraps a per-instance ``random.Random(seed)`` so successive calls
+    produce a reproducible stream of uniform ``[0, 1)`` floats without
+    touching Python's global RNG. Pass to `Move.propose` as the
+    ``next_random_number`` argument when a deterministic, isolated
+    RNG stream is required for a test.
+    """
+    return random.Random(seed).random
 
 
 def _build_small_ising_setup() -> dict:

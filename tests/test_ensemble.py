@@ -10,7 +10,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from mchammer_moves import CustomCanonicalEnsemble, PairSwap, SlideRow
+from mchammer_moves import CustomCanonicalEnsemble, CyclicShift, PairSwap
 
 
 def test_per_move_counts_match_trial_step_returns(small_ising_setup):
@@ -35,8 +35,8 @@ def test_per_move_counts_match_trial_step_returns(small_ising_setup):
         expected_accepted += ensemble._do_trial_step()
 
     rates = ensemble.acceptance_rates()
-    total_proposed = sum(r["proposed"] for r in rates.values())
-    total_accepted = sum(r["accepted"] for r in rates.values())
+    total_proposed = sum(r.proposed for r in rates.values())
+    total_accepted = sum(r.accepted for r in rates.values())
     assert total_proposed == n
     assert total_accepted == expected_accepted
 
@@ -61,7 +61,7 @@ def test_run_preserves_global_step_count(small_ising_setup):
     ensemble.run(n)
     assert ensemble._step == initial_step + n
     rates = ensemble.acceptance_rates()
-    assert sum(r["proposed"] for r in rates.values()) == n
+    assert sum(r.proposed for r in rates.values()) == n
 
 
 def test_weight_based_dispatch(small_ising_setup):
@@ -85,13 +85,13 @@ def test_weight_based_dispatch(small_ising_setup):
     for _ in range(n):
         ensemble._do_trial_step()
     rates = ensemble.acceptance_rates()
-    assert rates["swap_a"]["proposed"] + rates["swap_b"]["proposed"] == n
+    assert rates["swap_a"].proposed + rates["swap_b"].proposed == n
 
     expected_a = n * 4 / 5
     se = np.sqrt(n * (4 / 5) * (1 / 5))
-    z_a = abs(rates["swap_a"]["proposed"] - expected_a) / se
+    z_a = abs(rates["swap_a"].proposed - expected_a) / se
     assert z_a < 4.0, (
-        f"Weight dispatch off: swap_a proposed {rates['swap_a']['proposed']}, "
+        f"Weight dispatch off: swap_a proposed {rates['swap_a'].proposed}, "
         f"expected ~{expected_a}, z={z_a:.2f}"
     )
 
@@ -108,12 +108,12 @@ def test_reset_acceptance_counts(small_ising_setup):
     )
     ensemble.run(500)
     rates_before = ensemble.acceptance_rates()
-    assert rates_before["pair_swap"]["proposed"] == 500
+    assert rates_before["pair_swap"].proposed == 500
     global_step_before = ensemble._step
 
     ensemble.reset_acceptance_counts()
     rates_after = ensemble.acceptance_rates()
-    assert rates_after["pair_swap"]["proposed"] == 0
+    assert rates_after["pair_swap"].proposed == 0
     # The inherited cumulative step counter must NOT be reset
     assert ensemble._step == global_step_before
 
@@ -153,8 +153,8 @@ def test_constructor_validation(small_ising_setup):
         )
 
 
-def test_combined_pair_swap_and_slide_row_runs(small_ising_setup):
-    """Combined PairSwap + SlideRow ensemble runs without error.
+def test_combined_pair_swap_and_cyclic_shift_runs(small_ising_setup):
+    """Combined PairSwap + CyclicShift ensemble runs without error.
 
     Uses a synthetic single-row over the small system. The point is
     smoke-coverage of weight dispatch through both move types and
@@ -169,7 +169,7 @@ def test_combined_pair_swap_and_slide_row_runs(small_ising_setup):
         temperature=2000.0,
         moves=[
             (PairSwap(sublattice_index=0), 1.0),
-            (SlideRow(rows=rows), 0.1),
+            (CyclicShift(cycles=rows), 0.1),
         ],
         random_seed=42,
     )
@@ -177,11 +177,110 @@ def test_combined_pair_swap_and_slide_row_runs(small_ising_setup):
     for _ in range(n):
         ensemble._do_trial_step()
     rates = ensemble.acceptance_rates()
-    assert set(rates.keys()) == {"pair_swap", "slide_row"}
-    assert rates["pair_swap"]["proposed"] + rates["slide_row"]["proposed"] == n
+    assert set(rates.keys()) == {"pair_swap", "cyclic_shift"}
+    assert rates["pair_swap"].proposed + rates["cyclic_shift"].proposed == n
     # Both moves should have non-zero proposal counts
-    assert rates["pair_swap"]["proposed"] > 0
-    assert rates["slide_row"]["proposed"] > 0
+    assert rates["pair_swap"].proposed > 0
+    assert rates["cyclic_shift"].proposed > 0
+
+
+def test_seeded_trial_step_sequence_is_reproducible(small_ising_factory):
+    """Two ensembles seeded identically produce identical trajectories.
+
+    Pins the load-bearing claim in `_do_trial_step`'s docstring:
+    move-dispatch and `Move.propose` both draw from
+    `_next_random_number`, so the entire trial-step sequence is
+    determined by the seed. A future contributor adding an unrouted
+    `numpy.random` or `random.choice` somewhere in the trial-step path
+    would silently break per-replica RNG isolation under
+    `mchammer_pt.ProcessPool`; this test catches it.
+
+    mchammer drives MC from Python's global `random` module, so two
+    co-resident ensembles share state. The test constructs and runs
+    each ensemble sequentially — run-a-then-build-b-then-run-b — so
+    that each ``CanonicalEnsemble.__init__`` ``random.seed(2024)``
+    call lands the global state at the same starting point.
+    """
+    common_kwargs = dict(
+        temperature=1500.0,
+        moves=[
+            (PairSwap(sublattice_index=0, name="swap_a"), 1.0),
+            (PairSwap(sublattice_index=0, name="swap_b"), 1.0),
+        ],
+        random_seed=2024,
+    )
+    setup_a = small_ising_factory()
+    ensemble_a = CustomCanonicalEnsemble(
+        structure=setup_a["structure"],
+        calculator=setup_a["calculator"],
+        **common_kwargs,
+    )
+    ensemble_a.run(500)
+    occ_a = ensemble_a.configuration.occupations.copy()
+    rates_a = ensemble_a.acceptance_rates()
+
+    setup_b = small_ising_factory()
+    ensemble_b = CustomCanonicalEnsemble(
+        structure=setup_b["structure"],
+        calculator=setup_b["calculator"],
+        **common_kwargs,
+    )
+    ensemble_b.run(500)
+    np.testing.assert_array_equal(ensemble_b.configuration.occupations, occ_a)
+    assert ensemble_b.acceptance_rates() == rates_a
+
+
+def test_per_move_acceptance_in_data_container_is_per_interval(small_ising_setup):
+    """Per-move acceptance fields are *per-interval*, not cumulative.
+
+    The override of `_get_ensemble_data` is what makes per-move rates
+    visible from a `mchammer_pt.ProcessPool` run, where the parent
+    only ever sees the data container that's pickled back from the
+    worker. The contract is: the data-container column reports the
+    per-interval acceptance rate over the trials since the previous
+    write — matching mchammer's `acceptance_ratio` convention so the
+    per-move and global columns are directly comparable.
+
+    Pinned by snapshotting the cumulative counts at two points in
+    `acceptance_rates()` and verifying the data-container row for the
+    interval between them equals the implied per-interval rate.
+    """
+    setup = small_ising_setup
+    ensemble = CustomCanonicalEnsemble(
+        structure=setup["structure"],
+        calculator=setup["calculator"],
+        temperature=1500.0,
+        moves=[
+            (PairSwap(sublattice_index=0, name="swap_a"), 1.0),
+            (PairSwap(sublattice_index=0, name="swap_b"), 1.0),
+        ],
+        random_seed=7,
+        ensemble_data_write_interval=10,
+    )
+    ensemble.run(10)
+    rates_after_first = ensemble.acceptance_rates()
+    ensemble.run(10)
+    rates_after_second = ensemble.acceptance_rates()
+
+    df = ensemble.data_container.data
+    assert "swap_a_acceptance_rate" in df.columns
+    assert "swap_b_acceptance_rate" in df.columns
+
+    for name in ("swap_a", "swap_b"):
+        before = rates_after_first[name]
+        after = rates_after_second[name]
+        delta_accepted = after.accepted - before.accepted
+        delta_proposed = after.proposed - before.proposed
+        expected_interval_rate = (
+            delta_accepted / delta_proposed if delta_proposed > 0 else 0.0
+        )
+        # The final data-container row records the second interval.
+        column = f"{name}_acceptance_rate"
+        observed = float(df[column].iloc[-1])
+        assert observed == pytest.approx(expected_interval_rate, abs=1e-9), (
+            f"Per-interval rate mismatch for {name}: "
+            f"data-container={observed:.6f}, expected={expected_interval_rate:.6f}"
+        )
 
 
 def test_run_method_inherited(small_ising_setup):
@@ -201,4 +300,4 @@ def test_run_method_inherited(small_ising_setup):
     n = 500
     ensemble.run(n)
     rates = ensemble.acceptance_rates()
-    assert rates["pair_swap"]["proposed"] == n
+    assert rates["pair_swap"].proposed == n

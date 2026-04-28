@@ -27,7 +27,29 @@ classifiers = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=7", "scipy", "mypy", "ruff"]
+# `mchammer-pt` is an optional integration dependency: importing
+# `mchammer_moves` itself does not require it, but consuming
+# `CustomCanonicalEnsemble` through parallel tempering does. The
+# integration uses `mchammer-pt`'s native `ensemble_cls=` /
+# `ensemble_kwargs=` API (mchammer-pt v0.2+); the public
+# `mchammer_pt.testing.assert_boltzmann_sampling` utility is used by
+# the combined-kernel Boltzmann-sampling test in this package.
+#
+# `mchammer-pt` is not on PyPI yet, so we pull it from the v0.2.0
+# tag on GitHub. Switch to a plain `mchammer-pt>=0.2.0` specifier
+# once it is published. PyPI does not accept direct-URL
+# dependencies in uploaded distributions, so this also gates
+# whether `mchammer-moves` itself can be uploaded to PyPI.
+pt = [
+    "mchammer-pt @ git+https://github.com/bjmorgan/mchammer-pt.git@v0.2.0",
+]
+dev = [
+    "pytest>=7",
+    "scipy",
+    "mypy",
+    "ruff",
+    "mchammer-pt @ git+https://github.com/bjmorgan/mchammer-pt.git@v0.2.0",
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -40,15 +62,6 @@ python_version = "3.11"
 packages = ["mchammer_moves"]
 strict = true
 warn_return_any = false
-
-# pt_adapter.py is the legacy Replica-shaped wrapper around
-# CustomCanonicalEnsemble that pre-dates mchammer-pt's
-# `ensemble_cls=` API. Scheduled for removal in the migration to
-# mchammer-pt v0.2; type-checking it strictly is not worth the
-# retrofit effort.
-[[tool.mypy.overrides]]
-module = "mchammer_moves.pt_adapter"
-ignore_errors = true
 
 [tool.ruff]
 target-version = "py311"
