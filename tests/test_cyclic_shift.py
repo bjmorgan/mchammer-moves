@@ -32,10 +32,10 @@ def _make_fake_configuration(occupations: list[int]):
 def _fixed_rng(values: list[float]):
     """Callable returning a fixed sequence of uniform draws.
 
-    Used to force `CyclicShift.propose` down a specific (row, direction)
-    branch in deterministic structural tests. The callable cycles
-    through the supplied values so a single-proposal test only needs
-    to specify two draws (row index, direction).
+    Used to force `CyclicShift.propose` down a specific (cycle,
+    direction) branch in deterministic structural tests. The callable
+    cycles through the supplied values so a single-proposal test only
+    needs to specify two draws (cycle index, direction).
     """
     seq = iter(values)
 
@@ -119,6 +119,37 @@ def test_cyclic_shift_rejects_empty_cycles():
         CyclicShift(cycles=[[]])
     with pytest.raises(ValueError, match="length 1"):
         CyclicShift(cycles=[[0]])
+
+
+def test_cyclic_shift_returns_none_on_identity_proposal():
+    """A cycle whose every site shares one species produces an identity
+    shift; the move returns ``None`` so the per-move acceptance rate
+    in the data container is not inflated by trivial accepts.
+    """
+    cycle = [0, 1, 2, 3]
+    occupations = [42, 42, 42, 42]
+    config = _make_fake_configuration(occupations)
+    move = CyclicShift(cycles=[cycle])
+
+    # Any RNG draws produce an identity shift on a uniform cycle.
+    assert move.propose(config, _fixed_rng([0.0, 0.0])) is None
+    assert move.propose(config, _fixed_rng([0.0, 0.9])) is None
+
+
+def test_cyclic_shift_returns_proposal_when_cycle_is_not_uniform():
+    """A non-uniform cycle produces a non-identity proposal."""
+    cycle = [0, 1, 2, 3]
+    occupations = [10, 20, 10, 20]  # alternating, so any shift differs
+    config = _make_fake_configuration(occupations)
+    move = CyclicShift(cycles=[cycle])
+    proposal = move.propose(config, _fixed_rng([0.0, 0.0]))
+    assert proposal is not None
+
+
+def test_cyclic_shift_accepts_range_object_as_cycle():
+    """`range(N)` is a valid `Sequence[int]`; the constructor accepts it."""
+    move = CyclicShift(cycles=[range(4)])
+    assert move.cycles == [(0, 1, 2, 3)]
 
 
 def test_cyclic_shift_rejects_within_cycle_duplicate_sites():

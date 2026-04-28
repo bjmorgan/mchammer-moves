@@ -21,10 +21,6 @@ if TYPE_CHECKING:
 class MoveStats:
     """Per-move acceptance statistics returned by `acceptance_rates`.
 
-    Carries the ``proposed = accepted + rejected`` invariant by
-    construction (computed from the two stored counters rather than
-    stored independently). The acceptance rate is similarly computed.
-
     Args:
         accepted: Number of proposals accepted by the Metropolis
             criterion.
@@ -34,6 +30,9 @@ class MoveStats:
             distinct-species pair existed); the two are conflated
             because mchammer's own ``acceptance_ratio`` convention
             does not distinguish them.
+
+    The ``proposed`` and ``acceptance_rate`` properties are computed
+    from ``accepted`` and ``rejected``.
     """
 
     accepted: int
@@ -94,6 +93,14 @@ class CustomCanonicalEnsemble(CanonicalEnsemble):  # type: ignore[misc]
     The ``sublattice_probabilities`` argument of ``CanonicalEnsemble`` is
     not exposed. Sublattice selection is the responsibility of each
     :class:`Move` (e.g., :class:`PairSwap` takes a ``sublattice_index``).
+
+    For multiprocess parallel tempering via
+    ``mchammer_pt.CanonicalParallelTempering.process_pool``, this class
+    and every registered :class:`Move` subclass must be importable by
+    fully qualified name in the spawn workers — i.e. defined in a
+    ``.py`` module file, not in a Jupyter cell or a function body.
+    ``mchammer_pt.ProcessPool`` rejects interactive-``__main__`` and
+    function-local classes up-front.
     """
 
     def __init__(
@@ -148,6 +155,11 @@ class CustomCanonicalEnsemble(CanonicalEnsemble):  # type: ignore[misc]
         self._total_weight: float = sum(self._move_weights)
         self._move_accept_counts: Counter[str] = Counter()
         self._move_reject_counts: Counter[str] = Counter()
+        # Snapshots taken at each `_get_ensemble_data` call so the
+        # data-container column reports per-interval (not cumulative)
+        # acceptance, matching mchammer's `acceptance_ratio` convention.
+        self._last_recorded_accept_counts: Counter[str] = Counter()
+        self._last_recorded_reject_counts: Counter[str] = Counter()
 
         names = [m.name for m in self._moves]
         if len(set(names)) != len(names):
@@ -228,38 +240,51 @@ class CustomCanonicalEnsemble(CanonicalEnsemble):  # type: ignore[misc]
         """Extend the standard ensemble-data dict with per-move acceptance.
 
         Adds one ``<move_name>_acceptance_rate`` key per registered move,
-        carrying the *cumulative* acceptance rate up to the current step
-        (matching `BaseEnsemble`'s native ``acceptance_ratio`` convention).
-        These fields are appended to the per-replica `BaseDataContainer`
-        at every ``ensemble_data_write_interval`` and round-trip through
-        the HDF5 bundle written by `mchammer_pt`, so per-move statistics
-        are recoverable from a `ProcessPool` run without observer
+        recording the *per-interval* acceptance rate over the trials
+        since the previous call to this method. This matches
+        `BaseEnsemble`'s native ``acceptance_ratio`` convention so the
+        per-move and global columns of the resulting `BaseDataContainer`
+        are directly comparable. The fields round-trip through the HDF5
+        bundle written by `mchammer_pt`, so per-move statistics are
+        recoverable from a `ProcessPool` run without observer
         forwarding.
 
-        A reader of the data container sees the cumulative rate at each
-        write interval; per-interval rates can be recovered by
-        differencing the (proposed, accepted) counters across rows if
-        needed (the cumulative accept count is
-        ``acceptance_rate * proposed_at_interval`` and ``proposed`` is
-        derivable from ``mctrial`` and the move weights, though
-        recovering proposed-per-move from mctrial is an approximation
-        when weights are not equal).
+        Cumulative statistics remain available via `acceptance_rates`,
+        which reads the lifetime counters directly; only the
+        data-container fields are per-interval.
         """
         data = super()._get_ensemble_data()
         for move in self._moves:
-            accepted = self._move_accept_counts[move.name]
-            rejected = self._move_reject_counts[move.name]
-            proposed = accepted + rejected
-            data[f"{move.name}_acceptance_rate"] = (
-                accepted / proposed if proposed > 0 else 0.0
+            cum_accepted = self._move_accept_counts[move.name]
+            cum_rejected = self._move_reject_counts[move.name]
+            interval_accepted = (
+                cum_accepted - self._last_recorded_accept_counts[move.name]
             )
+            interval_rejected = (
+                cum_rejected - self._last_recorded_reject_counts[move.name]
+            )
+            interval_proposed = interval_accepted + interval_rejected
+            data[f"{move.name}_acceptance_rate"] = (
+                interval_accepted / interval_proposed
+                if interval_proposed > 0
+                else 0.0
+            )
+            self._last_recorded_accept_counts[move.name] = cum_accepted
+            self._last_recorded_reject_counts[move.name] = cum_rejected
         return data
 
     def reset_acceptance_counts(self) -> None:
         """Zero the per-move accept/reject counters.
+
+        Resets both the lifetime counters (read by `acceptance_rates`)
+        and the per-interval snapshot counters used by
+        `_get_ensemble_data`, so the next data-container write reports
+        an interval starting from zero.
 
         Useful for separating equilibration and production statistics.
         Does not affect the inherited global counters.
         """
         self._move_accept_counts.clear()
         self._move_reject_counts.clear()
+        self._last_recorded_accept_counts.clear()
+        self._last_recorded_reject_counts.clear()

@@ -36,9 +36,26 @@ class Move(ABC):
     ----------
     name
         Human-readable identifier used for per-move acceptance tracking.
+
+    Notes
+    -----
+    For multiprocess parallel tempering, every concrete `Move`
+    subclass must be importable by fully qualified name in the spawn
+    workers — i.e. defined in a ``.py`` module file, not in a Jupyter
+    cell or a function body. ``mchammer_pt.ProcessPool`` rejects
+    interactive-``__main__`` and function-local classes up-front.
     """
 
     name: str
+
+    def __init__(self, name: str) -> None:
+        """Store the move's identifier.
+
+        Subclasses should call ``super().__init__(name)`` to set
+        ``self.name``; without it, attribute access on `name` raises
+        ``AttributeError`` lazily at first use.
+        """
+        self.name = name
 
     @abstractmethod
     def propose(

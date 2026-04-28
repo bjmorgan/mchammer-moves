@@ -31,6 +31,11 @@ pip install -e ".[pt]"
 
 ## Quick start
 
+`structure`, `ce`, and `cycles` below are placeholders for your atoms
+object, cluster expansion, and chain definitions respectively; the
+package contains no system-specific geometry, so you supply them
+yourself.
+
 ```python
 from mchammer.calculators import ClusterExpansionCalculator
 from mchammer_moves import CustomCanonicalEnsemble, CyclicShift, PairSwap

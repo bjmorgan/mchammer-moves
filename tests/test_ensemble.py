@@ -91,7 +91,7 @@ def test_weight_based_dispatch(small_ising_setup):
     se = np.sqrt(n * (4 / 5) * (1 / 5))
     z_a = abs(rates["swap_a"].proposed - expected_a) / se
     assert z_a < 4.0, (
-        f"Weight dispatch off: swap_a proposed {rates['swap_a']['proposed']}, "
+        f"Weight dispatch off: swap_a proposed {rates['swap_a'].proposed}, "
         f"expected ~{expected_a}, z={z_a:.2f}"
     )
 
@@ -184,14 +184,66 @@ def test_combined_pair_swap_and_cyclic_shift_runs(small_ising_setup):
     assert rates["cyclic_shift"].proposed > 0
 
 
-def test_per_move_acceptance_propagates_to_data_container(small_ising_setup):
-    """Per-move acceptance rate fields land in the ensemble data container.
+def test_seeded_trial_step_sequence_is_reproducible(small_ising_factory):
+    """Two ensembles seeded identically produce identical trajectories.
+
+    Pins the load-bearing claim in `_do_trial_step`'s docstring:
+    move-dispatch and `Move.propose` both draw from
+    `_next_random_number`, so the entire trial-step sequence is
+    determined by the seed. A future contributor adding an unrouted
+    `numpy.random` or `random.choice` somewhere in the trial-step path
+    would silently break per-replica RNG isolation under
+    `mchammer_pt.ProcessPool`; this test catches it.
+
+    mchammer drives MC from Python's global `random` module, so two
+    co-resident ensembles share state. The test constructs and runs
+    each ensemble sequentially — run-a-then-build-b-then-run-b — so
+    that each ``CanonicalEnsemble.__init__`` ``random.seed(2024)``
+    call lands the global state at the same starting point.
+    """
+    common_kwargs = dict(
+        temperature=1500.0,
+        moves=[
+            (PairSwap(sublattice_index=0, name="swap_a"), 1.0),
+            (PairSwap(sublattice_index=0, name="swap_b"), 1.0),
+        ],
+        random_seed=2024,
+    )
+    setup_a = small_ising_factory()
+    ensemble_a = CustomCanonicalEnsemble(
+        structure=setup_a["structure"],
+        calculator=setup_a["calculator"],
+        **common_kwargs,
+    )
+    ensemble_a.run(500)
+    occ_a = ensemble_a.configuration.occupations.copy()
+    rates_a = ensemble_a.acceptance_rates()
+
+    setup_b = small_ising_factory()
+    ensemble_b = CustomCanonicalEnsemble(
+        structure=setup_b["structure"],
+        calculator=setup_b["calculator"],
+        **common_kwargs,
+    )
+    ensemble_b.run(500)
+    np.testing.assert_array_equal(ensemble_b.configuration.occupations, occ_a)
+    assert ensemble_b.acceptance_rates() == rates_a
+
+
+def test_per_move_acceptance_in_data_container_is_per_interval(small_ising_setup):
+    """Per-move acceptance fields are *per-interval*, not cumulative.
 
     The override of `_get_ensemble_data` is what makes per-move rates
     visible from a `mchammer_pt.ProcessPool` run, where the parent
     only ever sees the data container that's pickled back from the
-    worker. This test pins that the rate field for each registered
-    move is present in the data container after ``run``.
+    worker. The contract is: the data-container column reports the
+    per-interval acceptance rate over the trials since the previous
+    write — matching mchammer's `acceptance_ratio` convention so the
+    per-move and global columns are directly comparable.
+
+    Pinned by snapshotting the cumulative counts at two points in
+    `acceptance_rates()` and verifying the data-container row for the
+    interval between them equals the implied per-interval rate.
     """
     setup = small_ising_setup
     ensemble = CustomCanonicalEnsemble(
@@ -205,17 +257,30 @@ def test_per_move_acceptance_propagates_to_data_container(small_ising_setup):
         random_seed=7,
         ensemble_data_write_interval=10,
     )
-    ensemble.run(100)
+    ensemble.run(10)
+    rates_after_first = ensemble.acceptance_rates()
+    ensemble.run(10)
+    rates_after_second = ensemble.acceptance_rates()
+
     df = ensemble.data_container.data
     assert "swap_a_acceptance_rate" in df.columns
     assert "swap_b_acceptance_rate" in df.columns
-    # Final-row acceptance rate must equal the cumulative rate from the
-    # in-memory counters (the data container records cumulative rates).
-    rates = ensemble.acceptance_rates()
-    final_swap_a = float(df["swap_a_acceptance_rate"].iloc[-1])
-    final_swap_b = float(df["swap_b_acceptance_rate"].iloc[-1])
-    assert final_swap_a == pytest.approx(rates["swap_a"].acceptance_rate)
-    assert final_swap_b == pytest.approx(rates["swap_b"].acceptance_rate)
+
+    for name in ("swap_a", "swap_b"):
+        before = rates_after_first[name]
+        after = rates_after_second[name]
+        delta_accepted = after.accepted - before.accepted
+        delta_proposed = after.proposed - before.proposed
+        expected_interval_rate = (
+            delta_accepted / delta_proposed if delta_proposed > 0 else 0.0
+        )
+        # The final data-container row records the second interval.
+        column = f"{name}_acceptance_rate"
+        observed = float(df[column].iloc[-1])
+        assert observed == pytest.approx(expected_interval_rate, abs=1e-9), (
+            f"Per-interval rate mismatch for {name}: "
+            f"data-container={observed:.6f}, expected={expected_interval_rate:.6f}"
+        )
 
 
 def test_run_method_inherited(small_ising_setup):

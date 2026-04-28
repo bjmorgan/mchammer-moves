@@ -12,7 +12,7 @@ chain-like or ring-like sublattices.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING
 
 from mchammer_moves.moves.base import Move
@@ -39,20 +39,19 @@ class CyclicShift(Move):
 
     Detailed balance: the proposal probability for "cycle :math:`c`,
     direction :math:`d`" is :math:`1/(2 N_\\text{cycles})`, depending only
-    on the cycle count, not on the configuration or the cycle lengths.
-    The reverse of a :math:`+1` shift along cycle :math:`c` is a
-    :math:`-1` shift along the same cycle, with the same selection
-    probability. Standard Metropolis acceptance therefore preserves
-    detailed balance. Cycles may have different lengths.
+    on the cycle count, not on the configuration. The reverse of a
+    :math:`+1` shift along cycle :math:`c` is a :math:`-1` shift along
+    the same cycle, with the same selection probability. Standard
+    Metropolis acceptance therefore preserves detailed balance.
 
     Parameters
     ----------
     cycles
-        List of cycles, where each cycle is a list of site indices in
-        the order along which species are to be shifted. Cycles may
-        be of different lengths. Site indices are not validated
-        against any particular sublattice — that is the caller's
-        responsibility.
+        Sequence of cycles, where each cycle is a sequence of site
+        indices in the order along which species are to be shifted.
+        Cycles may be of different lengths. Site indices are not
+        validated against any particular sublattice — that is the
+        caller's responsibility.
     name
         Identifier used for per-move acceptance tracking.
 
@@ -65,35 +64,40 @@ class CyclicShift(Move):
     """
 
     def __init__(
-        self, cycles: list[list[int]], name: str = "cyclic_shift"
+        self,
+        cycles: Sequence[Sequence[int]],
+        name: str = "cyclic_shift",
     ) -> None:
         if not cycles:
             raise ValueError("`cycles` must contain at least one cycle.")
         seen: set[int] = set()
+        materialised: list[tuple[int, ...]] = []
         for c, cycle in enumerate(cycles):
-            if len(cycle) == 0:
+            cycle_tuple = tuple(cycle)
+            if len(cycle_tuple) == 0:
                 raise ValueError(f"Cycle {c} is empty.")
-            if len(cycle) == 1:
+            if len(cycle_tuple) == 1:
                 raise ValueError(
                     f"Cycle {c} has length 1; a shift on a single-site cycle "
                     "is the identity and not a useful move."
                 )
-            if len(set(cycle)) != len(cycle):
+            if len(set(cycle_tuple)) != len(cycle_tuple):
                 raise ValueError(
-                    f"Cycle {c} contains duplicate site indices ({cycle}); "
+                    f"Cycle {c} contains duplicate site indices ({list(cycle_tuple)}); "
                     "a shift would propose multiple species values for the "
                     "duplicated site."
                 )
-            overlap = seen & set(cycle)
+            overlap = seen & set(cycle_tuple)
             if overlap:
                 raise ValueError(
                     f"Cycle {c} shares site(s) {sorted(overlap)} with an "
                     "earlier cycle; overlapping cycles silently over-sample "
                     "shared sites. Likely a chain-construction bug."
                 )
-            seen.update(cycle)
-        self.name = name
-        self._cycles: list[tuple[int, ...]] = [tuple(c) for c in cycles]
+            seen.update(cycle_tuple)
+            materialised.append(cycle_tuple)
+        super().__init__(name)
+        self._cycles: list[tuple[int, ...]] = materialised
 
     @property
     def cycles(self) -> list[tuple[int, ...]]:
@@ -132,4 +136,13 @@ class CyclicShift(Move):
         # of cycle[(i - 1) % L]. Direction -1: cycle[(i + 1) % L].
         offset = -1 if direction == 1 else 1
         new_species = [int(occupations[cycle[(i + offset) % L]]) for i in range(L)]
+        # Skip identity proposals (uniform-species cycles) so they do not
+        # inflate the per-move acceptance rate. An identity is reversible
+        # at zero cost, so treating it as a null proposal does not bias
+        # detailed balance; counting it as accepted would simply make
+        # uniform-cycle channels look 100% healthy when no useful work
+        # is happening.
+        current_species = [int(occupations[s]) for s in cycle]
+        if new_species == current_species:
+            return None
         return list(cycle), new_species

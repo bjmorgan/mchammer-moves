@@ -59,7 +59,7 @@ class PairSwap(Move):
                 "values silently end-index into the sublattice list and "
                 "produce a working but wrong sublattice."
             )
-        self.name = name
+        super().__init__(name)
         self.sublattice_index = sublattice_index
         self.allowed_species = allowed_species
         self.allowed_sites = allowed_sites
@@ -71,13 +71,12 @@ class PairSwap(Move):
     ) -> tuple[list[int], list[int]] | None:
         """Propose a swap of two sites with differing species.
 
-        ``next_random_number`` is accepted for API compliance with
-        :meth:`Move.propose` but not consumed here. Pair-swap selection
-        is delegated to ``ConfigurationManager.get_swapped_state``,
-        which draws from mchammer's seeded Python ``random`` module —
-        the same underlying stream that backs ``next_random_number`` in
-        a `CustomCanonicalEnsemble` context — so the proposal sequence
-        is reproducible without an explicit argument here.
+        Selection is delegated to
+        ``ConfigurationManager.get_swapped_state``, which draws from
+        mchammer's seeded ``random`` module — the same stream that
+        backs ``next_random_number`` in a `CustomCanonicalEnsemble`
+        context. The ``next_random_number`` argument is therefore
+        unused here.
         """
         del next_random_number  # Stream-shared with mchammer's RNG; see docstring.
         try:
