@@ -176,11 +176,11 @@ def test_cyclic_shift_dispatches_across_multiple_cycles():
     """Both cycles must be reachable, and a slide on one cycle must
     not mutate sites in the other cycle.
 
-    Two cycles of different lengths are configured; many proposals
-    are drawn and we assert (a) each cycle is selected at least
-    once with high probability, (b) every proposal touches only sites
-    of one cycle, and (c) the species values produced are consistent
-    with the chosen cycle's length-specific wrap.
+    Two cycles of different lengths are configured; over many
+    proposals (a) each cycle is selected at least once with high
+    probability, (b) every proposal touches only sites of one cycle,
+    and (c) the species values produced are consistent with the
+    chosen cycle's length-specific wrap.
     """
     cycle_a = [0, 1, 2]      # length 3
     cycle_b = [10, 11, 12, 13, 14]  # length 5

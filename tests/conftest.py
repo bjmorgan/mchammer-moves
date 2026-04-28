@@ -22,9 +22,9 @@ def seeded_uniform(seed: int) -> Callable[[], float]:
 
     Wraps a per-instance ``random.Random(seed)`` so successive calls
     produce a reproducible stream of uniform ``[0, 1)`` floats without
-    touching Python's global RNG. Tests that previously seeded
-    ``random.seed(N)`` then called ``move.propose(config)`` now use
-    ``move.propose(config, seeded_uniform(N))`` instead.
+    touching Python's global RNG. Pass to `Move.propose` as the
+    ``next_random_number`` argument when a deterministic, isolated
+    RNG stream is required for a test.
     """
     return random.Random(seed).random
 

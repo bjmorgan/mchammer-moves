@@ -189,9 +189,7 @@ class CustomCanonicalEnsemble(CanonicalEnsemble):  # type: ignore[misc]
         If the move returns ``None`` (a null proposal — e.g., a
         :class:`PairSwap` on a sublattice with no distinct-species
         sites), no energy evaluation is performed and the step is
-        counted as a rejection on the move's per-move counter, matching
-        mchammer's `acceptance_ratio` convention of not distinguishing
-        rejection reasons.
+        counted as a rejection on the move's per-move counter.
 
         Move selection and the move's own randomness both draw from
         :meth:`_next_random_number`, so the entire trial-step sequence

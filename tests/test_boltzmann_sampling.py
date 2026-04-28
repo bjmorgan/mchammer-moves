@@ -43,14 +43,14 @@ def test_pair_swap_alone_samples_correct_boltzmann() -> None:
 
 
 def test_process_pool_propagates_per_move_acceptance(small_ising_setup) -> None:
-    """End-to-end integration with `mchammer_pt.process_pool`.
+    """`CustomCanonicalEnsemble` survives the `process_pool` spawn boundary.
 
-    Pins the headline migration claim: `CustomCanonicalEnsemble`
-    rides `mchammer_pt`'s native `ensemble_cls=` API through the
-    spawn boundary, with per-move acceptance fields surviving in
-    each replica's `BaseDataContainer`. The override of
-    `_get_ensemble_data` exists specifically to make this work; this
-    test exercises the pickle/spawn path that motivates it.
+    Constructs a `CanonicalParallelTempering.process_pool(...)` with
+    `ensemble_cls=CustomCanonicalEnsemble`, runs a few cycles, and
+    checks that each replica's `BaseDataContainer` carries the
+    per-move acceptance fields produced by `_get_ensemble_data`.
+    Pins the contract that per-move statistics are recoverable from
+    a multiprocess PT run without observer forwarding.
 
     A regression in `CustomCanonicalEnsemble.__init__` taking a
     non-picklable arg, or in mchammer-pt's spawn semantics, surfaces
