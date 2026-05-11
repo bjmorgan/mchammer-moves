@@ -63,6 +63,17 @@ packages = ["mchammer_moves"]
 strict = true
 warn_return_any = false
 
+# `mchammer` (icet) ships without a `py.typed` marker, so mypy
+# treats it as an untyped third-party dependency. The exact error
+# code mypy assigns depends on how the package is installed
+# (`import-untyped` for site-packages installs, `import-not-found`
+# for editable / source-tree installs); ignoring missing imports
+# here covers both and removes the need for per-import
+# `# type: ignore` suppressions that drift across mypy versions.
+[[tool.mypy.overrides]]
+module = ["mchammer.*"]
+ignore_missing_imports = true
+
 [tool.ruff]
 target-version = "py311"
 line-length = 88

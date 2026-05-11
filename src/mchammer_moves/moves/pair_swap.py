@@ -5,9 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
-from mchammer.configuration_manager import (  # type: ignore[import-untyped]
-    SwapNotPossibleError,
-)
+from mchammer.configuration_manager import SwapNotPossibleError
 
 from mchammer_moves.moves.base import Move
 

@@ -8,10 +8,8 @@ from typing import TYPE_CHECKING
 
 from ase import Atoms
 from ase.units import kB
-from mchammer.calculators.base_calculator import (  # type: ignore[import-untyped]
-    BaseCalculator,
-)
-from mchammer.ensembles import CanonicalEnsemble  # type: ignore[import-untyped]
+from mchammer.calculators.base_calculator import BaseCalculator
+from mchammer.ensembles import CanonicalEnsemble
 
 if TYPE_CHECKING:
     from mchammer_moves.moves.base import Move

@@ -8,9 +8,7 @@ from typing import TYPE_CHECKING
 from mchammer_moves.moves.base import Move
 
 if TYPE_CHECKING:
-    from mchammer.configuration_manager import (  # type: ignore[import-untyped]
-        ConfigurationManager,
-    )
+    from mchammer.configuration_manager import ConfigurationManager
 
 
 class MultiPairSwap(Move):
