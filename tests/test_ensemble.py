@@ -37,8 +37,19 @@ def test_per_move_counts_match_trial_step_returns(small_ising_setup):
     rates = ensemble.acceptance_rates()
     total_proposed = sum(r.proposed for r in rates.values())
     total_accepted = sum(r.accepted for r in rates.values())
+    total_rejected = sum(r.rejected for r in rates.values())
+    total_null = sum(r.null_proposed for r in rates.values())
     assert total_proposed == n
     assert total_accepted == expected_accepted
+    # The three counters must partition the trials cleanly. A future
+    # refactor that double-counts a Metropolis-rejected proposal into
+    # `null_proposed` (or vice versa) would still satisfy `proposed
+    # == n` but inflate one counter at the other's expense.
+    assert total_accepted + total_rejected + total_null == n
+    # `PairSwap` on a binary sublattice with non-trivial composition
+    # always has a valid distinct-species pair to swap, so no null
+    # returns are expected on this fixture.
+    assert total_null == 0
 
 
 def test_run_preserves_global_step_count(small_ising_setup):
@@ -116,6 +127,51 @@ def test_reset_acceptance_counts(small_ising_setup):
     assert rates_after["pair_swap"].proposed == 0
     # The inherited cumulative step counter must NOT be reset
     assert ensemble._step == global_step_before
+
+
+def test_reset_clears_null_snapshot_so_next_interval_is_sensible(
+    small_ising_setup,
+):
+    """`reset_acceptance_counts` must clear the null snapshot too,
+    otherwise the next `_get_ensemble_data` call computes a negative
+    interval-null delta and produces a nonsensical `null_rate`.
+
+    Force null returns first (single-species sublattice), drive a
+    data-container write so the null snapshot is populated, reset
+    the counters, then resume on a configuration that actually
+    advances the chain. The resulting `null_rate` for the new
+    interval must lie in ``[0, 1]``.
+    """
+    setup = small_ising_setup
+    ensemble = CustomCanonicalEnsemble(
+        structure=setup["structure"],
+        calculator=setup["calculator"],
+        temperature=1000.0,
+        moves=[(PairSwap(sublattice_index=0), 1.0)],
+        random_seed=0,
+        ensemble_data_write_interval=10,
+    )
+    n_sites = len(ensemble.configuration.occupations)
+    original_occupations = list(ensemble.configuration.occupations)
+
+    ensemble.update_occupations(list(range(n_sites)), [79] * n_sites)
+    ensemble.run(20)
+    null_only_stats = ensemble.acceptance_rates()["pair_swap"]
+    assert null_only_stats.null_proposed > 0  # snapshot is now non-zero
+
+    ensemble.reset_acceptance_counts()
+    ensemble.update_occupations(list(range(n_sites)), original_occupations)
+    ensemble.run(20)
+
+    # Every row must lie in [0, 1]; the buggy case (uncleared null
+    # snapshot) produces a negative `interval_null` on the first
+    # post-reset interval row, not the last, so checking only
+    # `iloc[-1]` would miss it.
+    df = ensemble.data_container.data
+    assert (df["pair_swap_null_rate"] >= 0.0).all()
+    assert (df["pair_swap_null_rate"] <= 1.0).all()
+    assert (df["pair_swap_acceptance_rate"] >= 0.0).all()
+    assert (df["pair_swap_acceptance_rate"] <= 1.0).all()
 
 
 def test_constructor_validation(small_ising_setup):

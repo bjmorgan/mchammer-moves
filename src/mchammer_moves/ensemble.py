@@ -291,6 +291,24 @@ class CustomCanonicalEnsemble(CanonicalEnsemble):  # type: ignore[misc]
             interval_null = (
                 cum_null - self._last_recorded_null_counts[move.name]
             )
+            if (
+                interval_accepted < 0
+                or interval_rejected < 0
+                or interval_null < 0
+            ):
+                # Should be unreachable: the cumulative counters only
+                # ever increase, and snapshots are taken from them.
+                # A negative interval delta means a snapshot was not
+                # cleared in step with its cumulative counter — most
+                # commonly a refactor of `reset_acceptance_counts`
+                # that forgot one of the `_last_recorded_*` Counters.
+                raise RuntimeError(
+                    f"Per-interval counter went negative for move "
+                    f"{move.name!r}: accepted={interval_accepted}, "
+                    f"rejected={interval_rejected}, null={interval_null}. "
+                    "This indicates a snapshot counter was not cleared "
+                    "alongside its cumulative counter."
+                )
             interval_proposed = interval_accepted + interval_rejected + interval_null
             if interval_proposed > 0:
                 data[f"{move.name}_acceptance_rate"] = (
