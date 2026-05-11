@@ -5,9 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
-from mchammer.configuration_manager import (  # type: ignore[import-untyped]
-    SwapNotPossibleError,
-)
+from mchammer.configuration_manager import SwapNotPossibleError
 
 from mchammer_moves.moves.base import Move
 
@@ -29,6 +27,14 @@ class PairSwap(Move):
     depends only on lattice geometry and is symmetric in the forward and
     reverse directions. Detailed balance is therefore satisfied under
     standard Metropolis acceptance.
+
+    The move returns ``None`` when the sublattice (after applying
+    ``allowed_species`` and ``allowed_sites``) has no distinct-species
+    pair to swap — most commonly when it is single-species. The
+    ensemble tracks ``None`` returns on a separate per-move counter;
+    ``MoveStats.null_rate`` exposes the fraction of trials that
+    returned no candidate, distinguishing structurally-infeasible
+    configurations from low-temperature trapped chains.
 
     Parameters
     ----------
@@ -58,6 +64,18 @@ class PairSwap(Move):
                 "mchammer's `Sublattices` indexes positively from 0; negative "
                 "values silently end-index into the sublattice list and "
                 "produce a working but wrong sublattice."
+            )
+        if allowed_species is not None and len(allowed_species) == 0:
+            raise ValueError(
+                "`allowed_species` is an empty list, which would filter out "
+                "every species and make every proposal return `None`. Pass "
+                "`None` to apply no species filter."
+            )
+        if allowed_sites is not None and len(allowed_sites) == 0:
+            raise ValueError(
+                "`allowed_sites` is an empty list, which would filter out "
+                "every site and make every proposal return `None`. Pass "
+                "`None` to apply no site filter."
             )
         super().__init__(name)
         self.sublattice_index = sublattice_index

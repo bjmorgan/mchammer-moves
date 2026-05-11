@@ -277,6 +277,17 @@ def test_pair_swap_rejects_negative_sublattice_index():
         PairSwap(sublattice_index=-1)
 
 
+def test_pair_swap_rejects_empty_filter_lists():
+    """An empty `allowed_species` or `allowed_sites` would silently
+    filter out everything and make every proposal return `None`. The
+    intent gap (caller meant `None`) is caught at construction.
+    """
+    with pytest.raises(ValueError, match="allowed_species.*empty"):
+        PairSwap(sublattice_index=0, allowed_species=[])
+    with pytest.raises(ValueError, match="allowed_sites.*empty"):
+        PairSwap(sublattice_index=0, allowed_sites=[])
+
+
 def test_pair_swap_returns_none_when_no_swap_is_possible(small_ising_setup):
     """`propose` returns `None` when the configuration manager has no
     distinct-species pair to swap on the chosen sublattice.

@@ -37,8 +37,19 @@ def test_per_move_counts_match_trial_step_returns(small_ising_setup):
     rates = ensemble.acceptance_rates()
     total_proposed = sum(r.proposed for r in rates.values())
     total_accepted = sum(r.accepted for r in rates.values())
+    total_rejected = sum(r.rejected for r in rates.values())
+    total_null = sum(r.null_proposed for r in rates.values())
     assert total_proposed == n
     assert total_accepted == expected_accepted
+    # The three counters must partition the trials cleanly. A future
+    # refactor that double-counts a Metropolis-rejected proposal into
+    # `null_proposed` (or vice versa) would still satisfy `proposed
+    # == n` but inflate one counter at the other's expense.
+    assert total_accepted + total_rejected + total_null == n
+    # `PairSwap` on a binary sublattice with non-trivial composition
+    # always has a valid distinct-species pair to swap, so no null
+    # returns are expected on this fixture.
+    assert total_null == 0
 
 
 def test_run_preserves_global_step_count(small_ising_setup):
@@ -118,6 +129,51 @@ def test_reset_acceptance_counts(small_ising_setup):
     assert ensemble._step == global_step_before
 
 
+def test_reset_clears_null_snapshot_so_next_interval_is_sensible(
+    small_ising_setup,
+):
+    """`reset_acceptance_counts` must clear the null snapshot too,
+    otherwise the next `_get_ensemble_data` call computes a negative
+    interval-null delta and produces a nonsensical `null_rate`.
+
+    Force null returns first (single-species sublattice), drive a
+    data-container write so the null snapshot is populated, reset
+    the counters, then resume on a configuration that actually
+    advances the chain. The resulting `null_rate` for the new
+    interval must lie in ``[0, 1]``.
+    """
+    setup = small_ising_setup
+    ensemble = CustomCanonicalEnsemble(
+        structure=setup["structure"],
+        calculator=setup["calculator"],
+        temperature=1000.0,
+        moves=[(PairSwap(sublattice_index=0), 1.0)],
+        random_seed=0,
+        ensemble_data_write_interval=10,
+    )
+    n_sites = len(ensemble.configuration.occupations)
+    original_occupations = list(ensemble.configuration.occupations)
+
+    ensemble.update_occupations(list(range(n_sites)), [79] * n_sites)
+    ensemble.run(20)
+    null_only_stats = ensemble.acceptance_rates()["pair_swap"]
+    assert null_only_stats.null_proposed > 0  # snapshot is now non-zero
+
+    ensemble.reset_acceptance_counts()
+    ensemble.update_occupations(list(range(n_sites)), original_occupations)
+    ensemble.run(20)
+
+    # Every row must lie in [0, 1]; the buggy case (uncleared null
+    # snapshot) produces a negative `interval_null` on the first
+    # post-reset interval row, not the last, so checking only
+    # `iloc[-1]` would miss it.
+    df = ensemble.data_container.data
+    assert (df["pair_swap_null_rate"] >= 0.0).all()
+    assert (df["pair_swap_null_rate"] <= 1.0).all()
+    assert (df["pair_swap_acceptance_rate"] >= 0.0).all()
+    assert (df["pair_swap_acceptance_rate"] <= 1.0).all()
+
+
 def test_constructor_validation(small_ising_setup):
     """Bad constructor inputs raise informative errors."""
     setup = small_ising_setup
@@ -151,6 +207,75 @@ def test_constructor_validation(small_ising_setup):
             ],
             **common,
         )
+
+
+def test_null_proposals_tracked_separately_from_metropolis_rejections(
+    small_ising_setup,
+):
+    """A move that always returns ``None`` increments only the null
+    counter, leaving accepted and (Metropolis-)rejected at zero.
+
+    Achieved by forcing the configuration to a single-species
+    occupation, on which `PairSwap.propose` always returns ``None``
+    (no distinct-species pair to swap). The ensemble must increment
+    `null_proposed`, not `rejected`, so that `MoveStats.null_rate`
+    can diagnose the structurally-infeasible configuration without
+    being conflated with energy rejections.
+    """
+    setup = small_ising_setup
+    ensemble = CustomCanonicalEnsemble(
+        structure=setup["structure"],
+        calculator=setup["calculator"],
+        temperature=1000.0,
+        moves=[(PairSwap(sublattice_index=0), 1.0)],
+        random_seed=0,
+    )
+    n_sites = len(ensemble.configuration.occupations)
+    only_au = [79] * n_sites  # single species → no swap possible
+    ensemble.update_occupations(list(range(n_sites)), only_au)
+
+    n_trials = 500
+    for _ in range(n_trials):
+        ensemble._do_trial_step()
+
+    stats = ensemble.acceptance_rates()["pair_swap"]
+    assert stats.accepted == 0
+    assert stats.rejected == 0
+    assert stats.null_proposed == n_trials
+    assert stats.proposed == n_trials
+    assert stats.acceptance_rate == 0.0
+    assert stats.null_rate == 1.0
+
+
+def test_per_move_null_rate_in_data_container(small_ising_setup):
+    """`<move>_null_rate` column appears alongside `<move>_acceptance_rate`
+    and reports the per-interval null fraction.
+
+    Forces a single-species configuration so that every PairSwap
+    proposal returns ``None``; the data-container row for the
+    interval must record `pair_swap_null_rate == 1.0` and
+    `pair_swap_acceptance_rate == 0.0`.
+    """
+    setup = small_ising_setup
+    ensemble = CustomCanonicalEnsemble(
+        structure=setup["structure"],
+        calculator=setup["calculator"],
+        temperature=1000.0,
+        moves=[(PairSwap(sublattice_index=0), 1.0)],
+        random_seed=0,
+        ensemble_data_write_interval=10,
+    )
+    n_sites = len(ensemble.configuration.occupations)
+    ensemble.update_occupations(list(range(n_sites)), [79] * n_sites)
+    ensemble.run(50)
+
+    df = ensemble.data_container.data
+    assert "pair_swap_acceptance_rate" in df.columns
+    assert "pair_swap_null_rate" in df.columns
+    last_acceptance = float(df["pair_swap_acceptance_rate"].iloc[-1])
+    last_null = float(df["pair_swap_null_rate"].iloc[-1])
+    assert last_acceptance == pytest.approx(0.0)
+    assert last_null == pytest.approx(1.0)
 
 
 def test_combined_pair_swap_and_cyclic_shift_runs(small_ising_setup):

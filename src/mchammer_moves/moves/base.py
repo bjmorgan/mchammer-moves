@@ -7,9 +7,7 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from mchammer.configuration_manager import (  # type: ignore[import-untyped]
-        ConfigurationManager,
-    )
+    from mchammer.configuration_manager import ConfigurationManager
 
 
 class Move(ABC):
