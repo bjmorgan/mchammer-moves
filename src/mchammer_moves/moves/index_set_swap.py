@@ -51,27 +51,22 @@ class IndexSetSwap(Move):
 
     Notes
     -----
-    Detailed balance: the unordered pair ``{g_i, g_j}`` is drawn
-    uniformly at random from the ``C(N, 2)`` distinct pairs at each
-    proposal, giving a selection probability that depends only on the
-    fixed list of index sets, not on the configuration. Swapping
-    ``(g_i, g_j)`` exchanges the two sets' entire contents, so each
-    set's composition (and the joint composition) is preserved by the
-    move. Any pair valid in the forward direction is therefore also
-    valid in the reverse direction with the same selection
-    probability. Standard Metropolis acceptance preserves detailed
-    balance.
+    Detailed balance: an ordered pair of distinct indices is drawn
+    uniformly from the ``N (N - 1)`` ordered options at each
+    proposal; the swap itself is symmetric in the two sets, so each
+    unordered pair is selected with probability ``1 / C(N, 2)``.
+    Selection probability depends only on the fixed list of index
+    sets, not on the configuration. Swapping ``(g_i, g_j)`` exchanges
+    the two sets' entire contents, so each set's composition is
+    preserved; any pair valid in the forward direction is also valid
+    in the reverse direction with the same selection probability.
+    Standard Metropolis acceptance preserves detailed balance.
 
-    The composition-match check rejects pairs whose current
-    occupations have differing species multisets — those proposals
-    would change each set's internal composition, which the move's
-    detailed-balance argument does not address (and which is rarely
-    the intended kinetic move). The identity-skip rejects proposals
-    where the two sets already hold identical occupation patterns;
-    counting these as rejections rather than accepts keeps the
-    per-move acceptance rate meaningful, and the rejected proposals
-    do not bias detailed balance because the identity is reversible
-    at zero cost.
+    Identity-swap proposals — the two sets currently holding the
+    same occupation pattern — return ``None`` rather than an
+    identity update so that the per-move acceptance rate stays
+    meaningful. Identity is reversible at zero cost, so dropping
+    these as nulls does not bias detailed balance.
     """
 
     def __init__(
@@ -151,7 +146,11 @@ class IndexSetSwap(Move):
         swap).
         """
         n = len(self._index_sets)
-        # Draw two distinct uniform indices in [0, n) without replacement.
+        # Draw an ordered pair (i, j) of distinct indices uniformly
+        # from the n (n - 1) ordered options: pick i in [0, n), then
+        # pick j in [0, n - 1) and shift past i. The swap below is
+        # symmetric in the two sets, so each unordered pair appears
+        # with probability 1 / C(n, 2).
         i = int(next_random_number() * n)
         j = int(next_random_number() * (n - 1))
         if j >= i:

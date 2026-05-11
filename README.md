@@ -136,12 +136,13 @@ geometry and composition, not on the current configuration:
   pairs on a sublattice is composition-invariant, so the probability of
   selecting any specific pair is symmetric in the forward and reverse
   directions.
-- `MultiPairSwap`: each of the `k` pairs is selected with probabilities
-  that depend only on the per-species counts in the not-yet-used pool;
-  those counts are composition-invariant under any sequence of valid
-  swaps. Summed over the `k!` orderings that yield the same
-  site-disjoint pair-set, the forward and reverse proposal
-  probabilities are equal.
+- `MultiPairSwap`: each pair is drawn by picking site 1 uniformly from
+  the non-used sublattice sites and site 2 uniformly from the non-used
+  sites of differing species. Summed over the `k!` orderings of the
+  same site-disjoint pair-set, the forward and reverse proposal
+  probabilities are equal: composition is invariant under any valid
+  swap, and the dependence on already-used sites cancels by symmetry
+  between the two directions.
 - `CyclicShift`: a cycle and direction are chosen uniformly at random.
   The reverse of a `+1` shift along cycle *c* is a `-1` shift along the
   same cycle, with the same selection probability.

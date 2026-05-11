@@ -73,7 +73,15 @@ class MultiPairSwap(Move):
     distinct-species pairs are available — for example, near edge
     compositions where the minority-species count drops below ``k``.
     The ensemble counts a ``None`` proposal as a rejection without an
-    energy evaluation.
+    energy evaluation. If the sublattice composition is structurally
+    too small for ``k`` pairs (binary case: fewer than ``k`` of the
+    minority species, after applying ``allowed_species`` and
+    ``allowed_sites``), every proposal returns ``None`` and the
+    per-move acceptance rate stays at zero. This pattern is
+    observationally similar to a low-temperature trapped move; check
+    the per-move proposal count against the accepted count and
+    confirm the configuration supports ``k`` site-disjoint pairs
+    before tuning the schedule.
     """
 
     def __init__(
