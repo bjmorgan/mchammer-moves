@@ -115,6 +115,14 @@ class IndexSetSwap(Move):
         super().__init__(name)
         self._index_sets: list[tuple[int, ...]] = materialised
         self.allowed_species = allowed_species
+        # Materialise the filter set once; `propose` is on the
+        # trial-step hot path and rebuilding `set(self.allowed_species)`
+        # per call adds an allocation that compounds over millions of
+        # trials. `frozenset` also makes the filter immune to
+        # caller-side mutation of the original list after construction.
+        self._allowed_species_set: frozenset[int] | None = (
+            frozenset(allowed_species) if allowed_species is not None else None
+        )
 
     @property
     def index_sets(self) -> list[tuple[int, ...]]:
@@ -161,15 +169,18 @@ class IndexSetSwap(Move):
         occ_g1 = [int(occupations[s]) for s in g1]
         occ_g2 = [int(occupations[s]) for s in g2]
 
-        if self.allowed_species is not None:
-            allowed = set(self.allowed_species)
+        if self._allowed_species_set is not None:
+            allowed = self._allowed_species_set
             if not allowed.issuperset(occ_g1) or not allowed.issuperset(occ_g2):
                 return None
 
-        if Counter(occ_g1) != Counter(occ_g2):
+        # Identity check first: identity implies composition match,
+        # so the cheaper list-equality short-circuit avoids the two
+        # `Counter` allocations in the (often common) identity case.
+        if occ_g1 == occ_g2:
             return None
 
-        if occ_g1 == occ_g2:
+        if Counter(occ_g1) != Counter(occ_g2):
             return None
 
         return list(g1) + list(g2), occ_g2 + occ_g1

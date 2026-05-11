@@ -113,6 +113,18 @@ class MultiPairSwap(Move):
         self.k = k
         self.allowed_species = allowed_species
         self.allowed_sites = allowed_sites
+        # Materialise filter sets once: `propose` is on the trial-step
+        # hot path and rebuilding `set(self.allowed_*)` per call adds
+        # a per-trial allocation that compounds across the millions
+        # of trials in a typical run. `frozenset` also makes the
+        # filters immune to caller-side mutation of the original
+        # lists after construction.
+        self._allowed_species_set: frozenset[int] | None = (
+            frozenset(allowed_species) if allowed_species is not None else None
+        )
+        self._allowed_sites_set: frozenset[int] | None = (
+            frozenset(allowed_sites) if allowed_sites is not None else None
+        )
 
     def propose(
         self,
@@ -130,14 +142,13 @@ class MultiPairSwap(Move):
         sublattice_sites = list(
             configuration.sublattices[self.sublattice_index].indices
         )
-        if self.allowed_sites is not None:
-            allowed_site_set = set(self.allowed_sites)
-            sublattice_sites = [s for s in sublattice_sites if s in allowed_site_set]
+        if self._allowed_sites_set is not None:
+            sublattice_sites = [
+                s for s in sublattice_sites if s in self._allowed_sites_set
+            ]
 
         occupations = configuration.occupations
-        allowed_species = (
-            set(self.allowed_species) if self.allowed_species is not None else None
-        )
+        allowed_species_set = self._allowed_species_set
 
         used: set[int] = set()
         all_sites: list[int] = []
@@ -148,7 +159,10 @@ class MultiPairSwap(Move):
                 s
                 for s in sublattice_sites
                 if s not in used
-                and (allowed_species is None or int(occupations[s]) in allowed_species)
+                and (
+                    allowed_species_set is None
+                    or int(occupations[s]) in allowed_species_set
+                )
             ]
             if len(available) < 2:
                 return None
