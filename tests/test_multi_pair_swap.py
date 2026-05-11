@@ -253,3 +253,14 @@ def test_multi_pair_swap_rejects_invalid_constructor_arguments():
         MultiPairSwap(sublattice_index=0, k=0)
     with pytest.raises(ValueError, match="k must be at least 1"):
         MultiPairSwap(sublattice_index=0, k=-3)
+
+
+def test_multi_pair_swap_rejects_empty_filter_lists():
+    """An empty `allowed_species` or `allowed_sites` would silently
+    filter out everything and make every proposal return `None`. The
+    intent gap (caller meant `None`) is caught at construction.
+    """
+    with pytest.raises(ValueError, match="allowed_species.*empty"):
+        MultiPairSwap(sublattice_index=0, allowed_species=[])
+    with pytest.raises(ValueError, match="allowed_sites.*empty"):
+        MultiPairSwap(sublattice_index=0, allowed_sites=[])

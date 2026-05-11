@@ -93,6 +93,18 @@ class MultiPairSwap(Move):
             )
         if k < 1:
             raise ValueError(f"k must be at least 1; got {k}.")
+        if allowed_species is not None and len(allowed_species) == 0:
+            raise ValueError(
+                "`allowed_species` is an empty list, which would filter out "
+                "every species and make every proposal return `None`. Pass "
+                "`None` to apply no species filter."
+            )
+        if allowed_sites is not None and len(allowed_sites) == 0:
+            raise ValueError(
+                "`allowed_sites` is an empty list, which would filter out "
+                "every site and make every proposal return `None`. Pass "
+                "`None` to apply no site filter."
+            )
         super().__init__(name)
         self.sublattice_index = sublattice_index
         self.k = k

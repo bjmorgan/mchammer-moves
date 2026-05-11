@@ -275,6 +275,15 @@ def test_index_set_swap_rejects_overlapping_sets():
         IndexSetSwap(index_sets=[[0, 1, 2], [2, 3, 4]])
 
 
+def test_index_set_swap_rejects_empty_allowed_species():
+    """An empty `allowed_species` would silently filter out every
+    species and make every proposal return `None`. The intent gap
+    (caller meant `None`) is caught at construction.
+    """
+    with pytest.raises(ValueError, match="allowed_species.*empty"):
+        IndexSetSwap(index_sets=[[0, 1, 2], [3, 4, 5]], allowed_species=[])
+
+
 def test_index_set_swap_accepts_range_objects():
     """`range(N)` is a valid `Sequence[int]`; the constructor accepts it."""
     move = IndexSetSwap(index_sets=[range(0, 3), range(3, 6)])

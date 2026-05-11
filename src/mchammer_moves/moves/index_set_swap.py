@@ -84,6 +84,12 @@ class IndexSetSwap(Move):
             raise ValueError(
                 f"`index_sets` must contain at least two sets; got {len(index_sets)}."
             )
+        if allowed_species is not None and len(allowed_species) == 0:
+            raise ValueError(
+                "`allowed_species` is an empty list, which would filter out "
+                "every species and make every proposal return `None`. Pass "
+                "`None` to apply no species filter."
+            )
         materialised: list[tuple[int, ...]] = []
         seen: set[int] = set()
         first_length: int | None = None

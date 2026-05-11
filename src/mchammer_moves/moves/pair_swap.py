@@ -57,6 +57,18 @@ class PairSwap(Move):
                 "values silently end-index into the sublattice list and "
                 "produce a working but wrong sublattice."
             )
+        if allowed_species is not None and len(allowed_species) == 0:
+            raise ValueError(
+                "`allowed_species` is an empty list, which would filter out "
+                "every species and make every proposal return `None`. Pass "
+                "`None` to apply no species filter."
+            )
+        if allowed_sites is not None and len(allowed_sites) == 0:
+            raise ValueError(
+                "`allowed_sites` is an empty list, which would filter out "
+                "every site and make every proposal return `None`. Pass "
+                "`None` to apply no site filter."
+            )
         super().__init__(name)
         self.sublattice_index = sublattice_index
         self.allowed_species = allowed_species
