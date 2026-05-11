@@ -29,8 +29,9 @@ class MoveStats:
             Examples: a `PairSwap` on a single-species sublattice;
             a `MultiPairSwap` on a sublattice with fewer than ``k``
             of the minority species; an `IndexSetSwap` whose drawn
-            pair has mismatched composition or already-identical
-            occupations. A move with ``accepted == 0`` and
+            pair already holds identical occupations (or, with
+            ``require_matching_composition=True``, has mismatched
+            composition). A move with ``accepted == 0`` and
             ``null_rate == 1`` is structurally infeasible on the
             current configuration and will never advance the chain
             until either the configuration or the move's

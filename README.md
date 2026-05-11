@@ -99,7 +99,7 @@ boundary and are recoverable from the HDF5 bundle written by
 separately: a move that returns `None` (e.g. a `PairSwap` on a
 single-species sublattice, a `MultiPairSwap` on a sublattice with
 fewer than `k` of one species, an `IndexSetSwap` whose drawn pair
-has mismatched composition) increments the null counter rather
+already holds identical occupations) increments the null counter rather
 than the rejection counter, so `null_rate` distinguishes a
 structurally-infeasible move (`null_rate ≈ 1`) from a
 low-temperature trapped chain (`acceptance_rate ≈ 0`,
@@ -157,10 +157,14 @@ geometry and composition, not on the current configuration:
   The reverse of a `+1` shift along cycle *c* is a `-1` shift along the
   same cycle, with the same selection probability.
 - `IndexSetSwap`: an unordered pair of index sets is drawn uniformly
-  from `C(N, 2)` distinct pairs. Swapping the two sets exchanges their
-  entire contents, so each set's composition is preserved; any pair
-  valid in the forward direction is therefore also valid in the
-  reverse direction with the same selection probability.
+  from `C(N, 2)` distinct pairs. Selection probability depends only
+  on the fixed list of index sets, not on the configuration, so
+  `P(A → B) = P(B → A)` directly. The optional
+  `require_matching_composition` filter (off by default) does not
+  break this: swapping any pair only exchanges the two groups'
+  contents, so the multiset of compositions held across the groups
+  is invariant under the move, and a pair filtered out in one
+  direction is also filtered out in the other.
 
 Standard Metropolis acceptance therefore satisfies detailed balance for any
 weighted combination of these moves. A symmetry test that empirically

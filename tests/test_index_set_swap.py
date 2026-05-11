@@ -15,6 +15,7 @@ Covers:
 from __future__ import annotations
 
 from collections import Counter
+from itertools import permutations
 from unittest.mock import MagicMock
 
 import numpy as np
@@ -71,9 +72,10 @@ def test_index_set_swap_basic_proposal():
     assert species == [101, 100, 100, 100, 101, 100]
 
 
-def test_index_set_swap_returns_none_on_composition_mismatch():
-    """Two sets with differing species multisets give a ``None``
-    proposal — composition-changing group swaps are excluded by design.
+def test_index_set_swap_accepts_composition_mismatch_by_default():
+    """Without ``require_matching_composition``, two sets with differing
+    species multisets give a valid swap proposal. The swap moves
+    composition between the two groups.
     """
     g1 = [0, 1, 2]
     g2 = [10, 11, 12]
@@ -83,6 +85,26 @@ def test_index_set_swap_returns_none_on_composition_mismatch():
 
     config = _make_fake_configuration(occupations)
     move = IndexSetSwap(index_sets=[g1, g2])
+    proposal = move.propose(config, _fixed_rng([0.0, 0.0]))
+    assert proposal is not None
+    sites, species = proposal
+    assert sites == g1 + g2
+    # g1 receives g2's contents; g2 receives g1's.
+    assert species == [100, 101, 100, 100, 100, 100]
+
+
+def test_index_set_swap_rejects_composition_mismatch_when_required():
+    """With ``require_matching_composition=True``, two sets with
+    differing species multisets give a ``None`` proposal.
+    """
+    g1 = [0, 1, 2]
+    g2 = [10, 11, 12]
+    occupations = [0] * 20
+    occupations[0], occupations[1], occupations[2] = 100, 100, 100  # all 100
+    occupations[10], occupations[11], occupations[12] = 100, 101, 100  # mixed
+
+    config = _make_fake_configuration(occupations)
+    move = IndexSetSwap(index_sets=[g1, g2], require_matching_composition=True)
     assert move.propose(config, _fixed_rng([0.0, 0.0])) is None
 
 
@@ -239,6 +261,83 @@ def test_index_set_swap_detailed_balance():
                 failures.append((i, j, a, b, z))
     assert not failures, (
         "IndexSetSwap detailed-balance violation: "
+        + ", ".join(
+            f"({i},{j}): {a} vs {b} (z={z:.2f})" for i, j, a, b, z in failures
+        )
+    )
+
+
+def test_index_set_swap_detailed_balance_default_mode():
+    """Empirical detailed balance for the default mode
+    (``require_matching_composition=False``) on three length-2 index
+    sets.
+
+    Total composition is fixed at 3 of ``sp_a`` and 3 of ``sp_b``;
+    per-group composition spans (2, 0), (1, 1), and (0, 2) across
+    states. The state space is ``C(6, 3) = 20`` placements of the
+    three ``sp_b`` sites across six sites, and includes
+    configurations where the three groups have mismatched
+    compositions. Composition-mixing swaps are exercised; the
+    transition-count matrix must remain symmetric within ~4 sigma.
+    The sibling detailed-balance test uses fixed per-group
+    composition, so this case adds the move set the default mode
+    introduces.
+    """
+    g1 = (0, 1)
+    g2 = (2, 3)
+    g3 = (4, 5)
+    sp_a, sp_b = 100, 101
+
+    states = sorted(set(permutations([0, 0, 0, 1, 1, 1])))
+    state_index = {s: i for i, s in enumerate(states)}
+
+    def to_occ(state: tuple[int, ...]) -> list[int]:
+        return [sp_b if b == 1 else sp_a for b in state]
+
+    def from_occ(occ: list[int]) -> tuple[int, ...]:
+        return tuple(0 if int(z) == sp_a else 1 for z in occ)
+
+    move = IndexSetSwap(index_sets=[list(g1), list(g2), list(g3)])
+    n_per = 4000
+    transitions = np.zeros((len(states), len(states)), dtype=int)
+    rng = seeded_uniform(31415)
+    for src in states:
+        config = _make_fake_configuration(to_occ(src))
+        for _ in range(n_per):
+            result = move.propose(config, rng)
+            if result is None:
+                transitions[state_index[src], state_index[src]] += 1
+                continue
+            sites, species = result
+            cand = list(config.occupations)
+            for s, z in zip(sites, species, strict=True):
+                cand[s] = z
+            transitions[state_index[src], state_index[from_occ(cand)]] += 1
+    # The transitions must include at least some across-composition
+    # moves — otherwise this test is no different from the
+    # require_matching_composition=True test and isn't exercising the
+    # default mode's added move set.
+    assert sum(
+        transitions[i, j]
+        for i, src in enumerate(states)
+        for j, dst in enumerate(states)
+        if i != j
+        and Counter(to_occ(src)[:2]) != Counter(to_occ(dst)[:2])
+    ) > 0, "default-mode test never exercises a composition-changing transition"
+
+    failures = []
+    for i in range(len(states)):
+        for j in range(i + 1, len(states)):
+            a, b = transitions[i, j], transitions[j, i]
+            if a + b < 30:
+                continue
+            mean = (a + b) / 2
+            std = np.sqrt((a + b) / 4)
+            z = abs(a - mean) / std
+            if z > 4.0:
+                failures.append((i, j, a, b, z))
+    assert not failures, (
+        "IndexSetSwap default-mode detailed-balance violation: "
         + ", ".join(
             f"({i},{j}): {a} vs {b} (z={z:.2f})" for i, j, a, b, z in failures
         )
