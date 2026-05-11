@@ -7,11 +7,18 @@ mchammer source or downstream wrappers such as `mchammer-pt`.
 The package provides:
 
 - a `Move` abstract base class for user-defined trial moves;
-- two built-in moves: `PairSwap` (the standard canonical two-site swap) and
-  `CyclicShift` (single-step shift of the species pattern along a
-  user-supplied index cycle, with periodic boundaries within the cycle —
-  useful for row or ring translations on chain-like or ring-like
-  sublattices);
+- four built-in moves:
+  - `PairSwap` — the standard canonical two-site swap;
+  - `MultiPairSwap` — `k` site-disjoint pair swaps applied as one
+    atomic proposal; useful when single-pair swaps are kinetically
+    blocked between adjacent minima in deep basins;
+  - `CyclicShift` — single-step shift of the species pattern along a
+    user-supplied index cycle, with periodic boundaries within the
+    cycle; useful for row or ring translations on chain-like or
+    ring-like sublattices;
+  - `IndexSetSwap` — swaps occupations between two equal-length index
+    sets drawn uniformly from a user-supplied list of groups; a
+    generic primitive for chain-, motif-, or layer-swap moves;
 - `CustomCanonicalEnsemble`, a drop-in replacement for
   `mchammer.ensembles.CanonicalEnsemble` that draws moves from a
   user-supplied weighted list and tracks per-move acceptance.
@@ -122,21 +129,32 @@ in the `data_NbO2F` project for a concrete construction.
 
 ## Detailed balance
 
-Both built-in moves have proposal probabilities that depend only on lattice
-geometry, not on the current configuration:
+All built-in moves have proposal probabilities that depend only on lattice
+geometry and composition, not on the current configuration:
 
 - `PairSwap`: at fixed canonical composition, the number of distinct-species
   pairs on a sublattice is composition-invariant, so the probability of
   selecting any specific pair is symmetric in the forward and reverse
   directions.
+- `MultiPairSwap`: each of the `k` pairs is selected with probabilities
+  that depend only on the per-species counts in the not-yet-used pool;
+  those counts are composition-invariant under any sequence of valid
+  swaps. Summed over the `k!` orderings that yield the same
+  site-disjoint pair-set, the forward and reverse proposal
+  probabilities are equal.
 - `CyclicShift`: a cycle and direction are chosen uniformly at random.
   The reverse of a `+1` shift along cycle *c* is a `-1` shift along the
   same cycle, with the same selection probability.
+- `IndexSetSwap`: an unordered pair of index sets is drawn uniformly
+  from `C(N, 2)` distinct pairs. Swapping the two sets exchanges their
+  entire contents, so each set's composition is preserved; any pair
+  valid in the forward direction is therefore also valid in the
+  reverse direction with the same selection probability.
 
 Standard Metropolis acceptance therefore satisfies detailed balance for any
 weighted combination of these moves. A symmetry test that empirically
-verifies this property is provided in the test suite and should be the first
-thing you run when adding a new move.
+verifies this property is provided in the test suite for each move and
+should be the first thing you run when adding a new move.
 
 ## Running tests
 
