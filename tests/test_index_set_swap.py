@@ -270,14 +270,16 @@ def test_index_set_swap_detailed_balance():
 def test_index_set_swap_detailed_balance_default_mode():
     """Empirical detailed balance for the default mode
     (``require_matching_composition=False``) on three length-2 index
-    sets at fixed total composition (3, 3).
+    sets.
 
-    Per-group composition is *not* fixed here: states span all
-    ``C(6, 3) = 20`` placements of the three 101s across six sites,
-    including configurations where the three groups have mismatched
+    Total composition is fixed at 3 of ``sp_a`` and 3 of ``sp_b``;
+    per-group composition spans (2, 0), (1, 1), and (0, 2) across
+    states. The state space is ``C(6, 3) = 20`` placements of the
+    three ``sp_b`` sites across six sites, and includes
+    configurations where the three groups have mismatched
     compositions. Composition-mixing swaps are exercised; the
     transition-count matrix must remain symmetric within ~4 sigma.
-    The existing detailed-balance test uses fixed per-group
+    The sibling detailed-balance test uses fixed per-group
     composition, so this case adds the move set the default mode
     introduces.
     """

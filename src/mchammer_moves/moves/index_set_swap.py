@@ -170,11 +170,20 @@ class IndexSetSwap(Move):
 
         Picks two distinct index sets uniformly at random from the
         configured list, reads their current occupations, and proposes
-        the site-by-site swap. Returns ``None`` if either set holds a
-        species outside ``allowed_species``, if their current
-        occupation patterns are already identical (identity swap), or
-        — when ``require_matching_composition=True`` — if the two
-        sets have different species multisets.
+        the site-by-site swap. Returns ``None`` on the first matching
+        condition, in this order:
+
+        1. either drawn set holds a species outside
+           ``allowed_species``;
+        2. the two sets currently hold identical occupation patterns
+           (identity swap);
+        3. ``require_matching_composition=True`` and the two sets
+           have different species multisets.
+
+        The order is short-circuit: an identity-and-composition-mismatched
+        pair is reported as an identity null, not a composition-mismatch
+        null, which matters when attributing causes to a high
+        ``MoveStats.null_rate``.
         """
         n = len(self._index_sets)
         # Draw an ordered pair (i, j) of distinct indices uniformly
