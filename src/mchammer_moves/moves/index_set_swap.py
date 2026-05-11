@@ -17,16 +17,20 @@ class IndexSetSwap(Move):
 
     A generic group-permutation primitive: given a fixed list of
     index sets ``[g_0, g_1, …]`` of common length ``L``, picks two
-    distinct sets uniformly at random and proposes exchanging the
-    occupations site-by-site between them. The two sets must currently
-    hold the same multiset of species — otherwise the swap would
-    change each set's internal composition, which is typically not
-    the intended kinetic move and is rejected as a null proposal.
+    distinct sets uniformly at random and proposes exchanging their
+    occupations site-by-site. Useful as the primitive underneath
+    project-specific group moves — chain swaps on a regular cubic
+    anion sublattice, motif swaps in an intermetallic, layer swaps
+    in a slab, and so on. The caller supplies the index sets; this
+    class is geometry-agnostic.
 
-    Useful as the primitive underneath project-specific group moves —
-    chain swaps on a regular cubic anion sublattice, motif swaps in an
-    intermetallic, layer swaps in a slab, and so on. The caller
-    supplies the index sets; this class is geometry-agnostic.
+    By default the move accepts any pair, including pairs whose
+    current occupations have differing species multisets — the swap
+    then moves composition between the two groups. Setting
+    ``require_matching_composition=True`` restricts the move to
+    pairs whose two groups currently hold the same multiset of
+    species, so that swaps preserve each group's internal
+    composition. Both modes satisfy detailed balance (see Notes).
 
     Parameters
     ----------
@@ -40,6 +44,16 @@ class IndexSetSwap(Move):
         Optional list of atomic numbers. If supplied, proposals are
         rejected (``None`` returned) when either of the two drawn sets
         currently holds a species outside the allowed list.
+    require_matching_composition
+        If ``True``, proposals where the two drawn groups currently
+        hold different species multisets are rejected as ``None``.
+        Useful when the groups carry a semantic identity (e.g. chains
+        of a fixed composition) that should be preserved across moves.
+        Defaults to ``False``: composition-changing swaps are allowed,
+        giving access to a larger move set that can move composition
+        between groups in one step — the typical choice when
+        ``IndexSetSwap`` is used to break out of partial-ordered
+        states.
 
     Raises
     ------
@@ -56,11 +70,18 @@ class IndexSetSwap(Move):
     proposal; the swap itself is symmetric in the two sets, so each
     unordered pair is selected with probability ``1 / C(N, 2)``.
     Selection probability depends only on the fixed list of index
-    sets, not on the configuration. Swapping ``(g_i, g_j)`` exchanges
-    the two sets' entire contents, so each set's composition is
-    preserved; any pair valid in the forward direction is also valid
-    in the reverse direction with the same selection probability.
-    Standard Metropolis acceptance preserves detailed balance.
+    sets, not on the configuration, so ``P(A → B) = P(B → A)`` for
+    every pair of states the move connects.
+
+    The ``require_matching_composition`` filter does not break
+    detailed balance: swapping any two groups only exchanges their
+    contents, so the multiset of compositions held across the
+    groups is invariant under the move. A pair filtered out as
+    composition-mismatched in state A is therefore also filtered
+    out in state B, and a pair accepted in A is also accepted in
+    B. The filter restricts the move's connectivity (composition
+    is preserved within each group's lifetime) but the surviving
+    transitions still satisfy ``P(A → B) = P(B → A)``.
 
     Identity-swap proposals — the two sets currently holding the
     same occupation pattern — return ``None`` rather than an
@@ -74,6 +95,7 @@ class IndexSetSwap(Move):
         index_sets: Sequence[Sequence[int]],
         name: str = "index_set_swap",
         allowed_species: list[int] | None = None,
+        require_matching_composition: bool = False,
     ) -> None:
         if len(index_sets) < 2:
             raise ValueError(
@@ -115,6 +137,7 @@ class IndexSetSwap(Move):
         super().__init__(name)
         self._index_sets: list[tuple[int, ...]] = materialised
         self.allowed_species = allowed_species
+        self.require_matching_composition = require_matching_composition
         # Materialise the filter set once; `propose` is on the
         # trial-step hot path and rebuilding `set(self.allowed_species)`
         # per call adds an allocation that compounds over millions of
@@ -148,10 +171,10 @@ class IndexSetSwap(Move):
         Picks two distinct index sets uniformly at random from the
         configured list, reads their current occupations, and proposes
         the site-by-site swap. Returns ``None`` if either set holds a
-        species outside ``allowed_species``, if the two sets have
-        different species multisets (composition mismatch), or if their
-        current occupation patterns are already identical (identity
-        swap).
+        species outside ``allowed_species``, if their current
+        occupation patterns are already identical (identity swap), or
+        — when ``require_matching_composition=True`` — if the two
+        sets have different species multisets.
         """
         n = len(self._index_sets)
         # Draw an ordered pair (i, j) of distinct indices uniformly
@@ -174,13 +197,17 @@ class IndexSetSwap(Move):
             if not allowed.issuperset(occ_g1) or not allowed.issuperset(occ_g2):
                 return None
 
-        # Identity check first: identity implies composition match,
-        # so the cheaper list-equality short-circuit avoids the two
-        # `Counter` allocations in the (often common) identity case.
+        # Identity check first: identity is the most likely null
+        # outcome on highly-ordered configurations and the cheap
+        # list-equality short-circuit avoids the `Counter` allocations
+        # below.
         if occ_g1 == occ_g2:
             return None
 
-        if Counter(occ_g1) != Counter(occ_g2):
+        if (
+            self.require_matching_composition
+            and Counter(occ_g1) != Counter(occ_g2)
+        ):
             return None
 
         return list(g1) + list(g2), occ_g2 + occ_g1
