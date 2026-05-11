@@ -90,10 +90,20 @@ with CanonicalParallelTempering.process_pool(
     history = pt.run(n_cycles=N_CYCLES)
 ```
 
-Per-move acceptance is recorded into each replica's
-`mchammer.BaseDataContainer` at every `ensemble_data_write_interval`,
-so it survives the `ProcessPool` boundary and is recoverable from the
-HDF5 bundle written by `mchammer-pt` without observer forwarding.
+Per-move acceptance and null-proposal rates are recorded into each
+replica's `mchammer.BaseDataContainer` at every
+`ensemble_data_write_interval` as `<move>_acceptance_rate` and
+`<move>_null_rate` columns, so they survive the `ProcessPool`
+boundary and are recoverable from the HDF5 bundle written by
+`mchammer-pt` without observer forwarding. The two are tracked
+separately: a move that returns `None` (e.g. a `PairSwap` on a
+single-species sublattice, a `MultiPairSwap` on a sublattice with
+fewer than `k` of one species, an `IndexSetSwap` whose drawn pair
+has mismatched composition) increments the null counter rather
+than the rejection counter, so `null_rate` distinguishes a
+structurally-infeasible move (`null_rate ≈ 1`) from a
+low-temperature trapped chain (`acceptance_rate ≈ 0`,
+`null_rate ≈ 0`).
 
 For multiprocess runs, `CustomCanonicalEnsemble` and every `Move`
 subclass must be importable by fully qualified name in spawn workers

@@ -31,10 +31,10 @@ class PairSwap(Move):
     The move returns ``None`` when the sublattice (after applying
     ``allowed_species`` and ``allowed_sites``) has no distinct-species
     pair to swap — most commonly when it is single-species. The
-    ensemble counts the ``None`` proposal as a rejection without an
-    energy evaluation. Persistent zero acceptance with non-trivial
-    proposal counts is the diagnostic for a structurally infeasible
-    sublattice configuration.
+    ensemble tracks ``None`` returns on a separate per-move counter;
+    ``MoveStats.null_rate`` exposes the fraction of trials that
+    returned no candidate, distinguishing structurally-infeasible
+    configurations from low-temperature trapped chains.
 
     Parameters
     ----------

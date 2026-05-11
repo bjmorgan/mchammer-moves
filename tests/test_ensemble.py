@@ -153,6 +153,75 @@ def test_constructor_validation(small_ising_setup):
         )
 
 
+def test_null_proposals_tracked_separately_from_metropolis_rejections(
+    small_ising_setup,
+):
+    """A move that always returns ``None`` increments only the null
+    counter, leaving accepted and (Metropolis-)rejected at zero.
+
+    Achieved by forcing the configuration to a single-species
+    occupation, on which `PairSwap.propose` always returns ``None``
+    (no distinct-species pair to swap). The ensemble must increment
+    `null_proposed`, not `rejected`, so that `MoveStats.null_rate`
+    can diagnose the structurally-infeasible configuration without
+    being conflated with energy rejections.
+    """
+    setup = small_ising_setup
+    ensemble = CustomCanonicalEnsemble(
+        structure=setup["structure"],
+        calculator=setup["calculator"],
+        temperature=1000.0,
+        moves=[(PairSwap(sublattice_index=0), 1.0)],
+        random_seed=0,
+    )
+    n_sites = len(ensemble.configuration.occupations)
+    only_au = [79] * n_sites  # single species → no swap possible
+    ensemble.update_occupations(list(range(n_sites)), only_au)
+
+    n_trials = 500
+    for _ in range(n_trials):
+        ensemble._do_trial_step()
+
+    stats = ensemble.acceptance_rates()["pair_swap"]
+    assert stats.accepted == 0
+    assert stats.rejected == 0
+    assert stats.null_proposed == n_trials
+    assert stats.proposed == n_trials
+    assert stats.acceptance_rate == 0.0
+    assert stats.null_rate == 1.0
+
+
+def test_per_move_null_rate_in_data_container(small_ising_setup):
+    """`<move>_null_rate` column appears alongside `<move>_acceptance_rate`
+    and reports the per-interval null fraction.
+
+    Forces a single-species configuration so that every PairSwap
+    proposal returns ``None``; the data-container row for the
+    interval must record `pair_swap_null_rate == 1.0` and
+    `pair_swap_acceptance_rate == 0.0`.
+    """
+    setup = small_ising_setup
+    ensemble = CustomCanonicalEnsemble(
+        structure=setup["structure"],
+        calculator=setup["calculator"],
+        temperature=1000.0,
+        moves=[(PairSwap(sublattice_index=0), 1.0)],
+        random_seed=0,
+        ensemble_data_write_interval=10,
+    )
+    n_sites = len(ensemble.configuration.occupations)
+    ensemble.update_occupations(list(range(n_sites)), [79] * n_sites)
+    ensemble.run(50)
+
+    df = ensemble.data_container.data
+    assert "pair_swap_acceptance_rate" in df.columns
+    assert "pair_swap_null_rate" in df.columns
+    last_acceptance = float(df["pair_swap_acceptance_rate"].iloc[-1])
+    last_null = float(df["pair_swap_null_rate"].iloc[-1])
+    assert last_acceptance == pytest.approx(0.0)
+    assert last_null == pytest.approx(1.0)
+
+
 def test_combined_pair_swap_and_cyclic_shift_runs(small_ising_setup):
     """Combined PairSwap + CyclicShift ensemble runs without error.
 
