@@ -7,7 +7,7 @@ mchammer source or downstream wrappers such as `mchammer-pt`.
 The package provides:
 
 - a `Move` abstract base class for user-defined trial moves;
-- four built-in moves:
+- five built-in moves:
   - `PairSwap` — the standard canonical two-site swap;
   - `MultiPairSwap` — `k` site-disjoint pair swaps applied as one
     atomic proposal; useful when single-pair swaps are kinetically
@@ -16,6 +16,10 @@ The package provides:
     user-supplied index cycle, with periodic boundaries within the
     cycle; useful for row or ring translations on chain-like or
     ring-like sublattices;
+  - `CyclicReflection` — long-range reflection of the species pattern
+    along an index cycle around a randomly-chosen pivot; complements
+    `CyclicShift`'s nearest-neighbour shifts by enabling species to
+    hop across a chain in a single accepted move;
   - `IndexSetSwap` — swaps occupations between two equal-length index
     sets drawn uniformly from a user-supplied list of groups; a
     generic primitive for chain-, motif-, or layer-swap moves;
@@ -156,6 +160,10 @@ geometry and composition, not on the current configuration:
 - `CyclicShift`: a cycle and direction are chosen uniformly at random.
   The reverse of a `+1` shift along cycle *c* is a `-1` shift along the
   same cycle, with the same selection probability.
+- `CyclicReflection`: a cycle and integer pivot are chosen uniformly
+  at random. Cyclic reflection is an involution, so the reverse of a
+  reflection along `(c, p)` is the same reflection along `(c, p)`,
+  with the same selection probability.
 - `IndexSetSwap`: an unordered pair of index sets is drawn uniformly
   from `C(N, 2)` distinct pairs. Selection probability depends only
   on the fixed list of index sets, not on the configuration, so
