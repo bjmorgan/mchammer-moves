@@ -43,13 +43,17 @@ class CyclicReflection(Move):
 
     Detailed balance: cyclic reflection is an involution — applying
     the same ``(cycle, pivot)`` draw twice returns the original
-    configuration. The proposal probability for "cycle :math:`c`,
-    pivot :math:`p`" is :math:`1 / (N_\\text{cycles} \\cdot L_c)`,
-    depending only on the fixed list of cycles, not on the
-    configuration. The reverse of any reflection along
-    ``(c, p)`` is the same reflection along ``(c, p)``, with the same
-    selection probability. Standard Metropolis acceptance therefore
-    preserves detailed balance.
+    configuration. The cycle is picked uniformly from the configured
+    list, then the pivot is picked uniformly from
+    :math:`\\{0, \\ldots, L_c - 1\\}` for the chosen cycle's length
+    :math:`L_c` (so different cycles draw pivots from
+    cycle-specific ranges, with no rejection sampling). The joint
+    selection probability for "cycle :math:`c`, pivot :math:`p`" is
+    :math:`1 / (N_\\text{cycles} \\cdot L_c)`, depending only on the
+    fixed list of cycles, not on the configuration. The reverse of
+    any reflection along ``(c, p)`` is the same reflection along
+    ``(c, p)``, with the same selection probability. Standard
+    Metropolis acceptance therefore preserves detailed balance.
 
     Parameters
     ----------
@@ -168,8 +172,6 @@ class CyclicReflection(Move):
         pivot = int(next_random_number() * L)
 
         occupations = configuration.occupations
-        # Cyclic reflection: site at cycle position i receives the species
-        # at cycle position (2 * pivot - i) mod L.
         new_species = [
             int(occupations[cycle[(2 * pivot - i) % L]]) for i in range(L)
         ]

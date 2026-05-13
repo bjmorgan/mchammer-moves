@@ -46,9 +46,9 @@ def _fixed_rng(values: list[float]):
 
 
 def test_cyclic_reflection_pivot_0_on_length_4_swaps_off_axis_pair():
-    """For row ``[10, 11, 12, 13]`` with species ``[A, B, C, D]``, a
-    reflection at pivot ``0`` fixes positions 0 and 2 (the pivot and
-    its antipode under cyclic L=4) and swaps positions 1 and 3.
+    """For cycle ``[10, 11, 12, 13]`` with species ``[A, B, C, D]``,
+    a reflection at pivot ``0`` fixes positions 0 and 2 (the pivot
+    and its antipode under cyclic L=4) and swaps positions 1 and 3.
     """
     cycle = [10, 11, 12, 13]
     occupations = [0] * 20
@@ -68,7 +68,7 @@ def test_cyclic_reflection_pivot_0_on_length_4_swaps_off_axis_pair():
 
 
 def test_cyclic_reflection_pivot_in_middle_fixes_centre_for_odd_length():
-    """For row ``[0, 1, 2, 3, 4]`` with species ``[A, B, C, D, E]``,
+    """For cycle ``[0, 1, 2, 3, 4]`` with species ``[A, B, C, D, E]``,
     a reflection at pivot ``2`` fixes position 2 (the pivot) and
     swaps the pairs (1, 3) and (0, 4).
     """
