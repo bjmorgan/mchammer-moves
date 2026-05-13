@@ -13,6 +13,9 @@ mchammer canonical sampling. The package exposes:
   ring translations on lattice sublattices with chain-like or
   ring-like topology when standard single-site swaps are
   kinetically blocked.
+* :class:`CyclicReflection` — long-range reflection of the species
+  pattern along an index cycle around a randomly-chosen pivot;
+  complement to ``CyclicShift``'s nearest-neighbour shifts.
 * :class:`IndexSetSwap` — generic group-permutation primitive that
   swaps occupations between two equal-length index sets drawn
   uniformly from a user-supplied list.
@@ -23,6 +26,7 @@ mchammer canonical sampling. The package exposes:
 
 from mchammer_moves.ensemble import CustomCanonicalEnsemble, MoveStats
 from mchammer_moves.moves.base import Move
+from mchammer_moves.moves.cyclic_reflection import CyclicReflection
 from mchammer_moves.moves.cyclic_shift import CyclicShift
 from mchammer_moves.moves.index_set_swap import IndexSetSwap
 from mchammer_moves.moves.multi_pair_swap import MultiPairSwap
@@ -30,6 +34,7 @@ from mchammer_moves.moves.pair_swap import PairSwap
 
 __all__ = [
     "CustomCanonicalEnsemble",
+    "CyclicReflection",
     "CyclicShift",
     "IndexSetSwap",
     "Move",

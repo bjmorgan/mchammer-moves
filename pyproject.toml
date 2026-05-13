@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mchammer-moves"
-version = "0.2.0"
+version = "0.3.0"
 description = "Custom Monte Carlo moves for icet/mchammer."
 readme = "README.md"
 requires-python = ">=3.11"
