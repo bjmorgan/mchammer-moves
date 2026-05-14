@@ -571,12 +571,13 @@ class CustomWangLandauEnsemble(WangLandauEnsemble):  # type: ignore[misc]
         picks a move by weight, asks it for a proposal, evaluates the
         energy change, and applies the WL acceptance condition.
 
-        Rejection classification (window vs WL) is only performed once
-        the walker has reached the energy window. During the pre-window
-        search phase, ``_acceptance_condition`` uses a distance-penalty
-        heuristic that does not call ``_allow_move``, so
-        ``_last_window_allowed`` stays ``None``. Pre-window rejections
-        are counted in the aggregate reject counter but not broken down.
+        Rejection classification (window vs WL) is gated on
+        ``self._reached_energy_window``. Pre-window rejections bypass
+        the classification block and are counted only in the aggregate
+        reject counter. On a rejected trial step the walker's bin does
+        not change, so ``_reached_energy_window`` cannot transition to
+        ``True`` mid-step; the gate is therefore safe to evaluate after
+        ``_acceptance_condition`` returns.
         """
         move = self._dispatcher.choose(self._next_random_number)
         proposal = move.propose(self.configuration, self._next_random_number)
