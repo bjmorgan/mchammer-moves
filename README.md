@@ -1,7 +1,9 @@
 # mchammer-moves
 
-Custom Monte Carlo trial moves for [icet/mchammer](https://icet.materialsmodeling.org/),
-designed to slot into existing canonical sampling without modification of the
+Custom Monte Carlo trial moves for [icet/mchammer](https://icet.materialsmodeling.org/).
+The `Move` base class defines a sampler-agnostic proposal contract; ensemble
+adapters consume moves and handle acceptance, bookkeeping, and data-container
+integration for canonical and Wang-Landau sampling, without modification of the
 mchammer source or downstream wrappers such as `mchammer-pt`.
 
 The package provides:
@@ -25,7 +27,12 @@ The package provides:
     generic primitive for chain-, motif-, or layer-swap moves;
 - `CustomCanonicalEnsemble`, a drop-in replacement for
   `mchammer.ensembles.CanonicalEnsemble` that draws moves from a
-  user-supplied weighted list and tracks per-move acceptance.
+  user-supplied weighted list and tracks per-move acceptance;
+- `CustomWangLandauEnsemble`, a drop-in replacement for
+  `mchammer.ensembles.WangLandauEnsemble` with the same weighted-move
+  dispatch, plus per-move window-vs-WL rejection classification;
+- `MoveDispatcher`, the shared weighted-selection and per-move
+  bookkeeping engine used by both ensemble adapters.
 
 Installation (editable):
 
@@ -115,6 +122,52 @@ subclass must be importable by fully qualified name in spawn workers
 cells). `mchammer-pt`'s `ProcessPool` rejects interactive-`__main__`
 and function-local classes up-front.
 
+## Use with Wang-Landau
+
+`CustomWangLandauEnsemble` accepts the same `moves` list as
+`CustomCanonicalEnsemble` and forwards all other parameters to
+`WangLandauEnsemble`:
+
+```python
+from mchammer.calculators import ClusterExpansionCalculator
+from mchammer_moves import CustomWangLandauEnsemble, PairSwap
+
+calc = ClusterExpansionCalculator(structure, ce)
+
+mc = CustomWangLandauEnsemble(
+    structure=structure,
+    calculator=calc,
+    energy_spacing=0.1,
+    moves=[
+        (PairSwap(sublattice_index=0), 1.0),
+    ],
+    energy_limit_left=-100.0,
+    energy_limit_right=-90.0,
+    schedule="1_over_t",
+)
+mc.run(1_000_000)
+
+print(mc.acceptance_rates())
+print(mc.rejection_breakdown())
+```
+
+Per-move acceptance, null, window-rejection, and WL-rejection rates are
+recorded into the `WangLandauDataContainer` at every
+`ensemble_data_write_interval` as `<move>_acceptance_rate`,
+`<move>_null_rate`, `<move>_window_rejection_rate`, and
+`<move>_wl_rejection_rate` columns. The `rejection_breakdown()` method
+provides cumulative window-vs-WL rejection counts for interactive use.
+
+`<move>_acceptance_rate` and `<move>_null_rate` use total proposals
+(accepted + rejected + null) as the denominator. `<move>_window_rejection_rate`
+and `<move>_wl_rejection_rate` use classified in-window rejections as the
+denominator — they do not share a denominator with the first two columns and
+do not sum with them to any fixed value.
+
+Rejection classification is only performed once the walker has reached
+the energy window. Pre-window search-phase rejections are counted in the
+aggregate `MoveStats.rejected` counter but not broken down further.
+
 ## Constructing cycles for `CyclicShift`
 
 `CyclicShift` expects a list of *cycles*, where each cycle is a list of
@@ -178,6 +231,12 @@ Standard Metropolis acceptance therefore satisfies detailed balance for any
 weighted combination of these moves. A symmetry test that empirically
 verifies this property is provided in the test suite for each move and
 should be the first thing you run when adding a new move.
+
+For Wang-Landau sampling, `CustomWangLandauEnsemble` replaces the
+Metropolis criterion with the WL entropy-based acceptance condition
+inherited from `WangLandauEnsemble`. The symmetric-proposal property
+of each move still holds, so the WL algorithm's convergence guarantees
+are preserved for any weighted combination of the built-in moves.
 
 ## Running tests
 
