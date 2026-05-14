@@ -310,23 +310,7 @@ class CustomCanonicalEnsemble(CanonicalEnsemble):  # type: ignore[misc]
         ensemble_data_write_interval: int | None = None,
         trajectory_write_interval: int | None = None,
     ) -> None:
-        if not moves:
-            raise ValueError("`moves` must contain at least one (move, weight) entry.")
-        for entry in moves:
-            if (
-                not isinstance(entry, tuple)
-                or len(entry) != 2
-                or not isinstance(entry[1], (int, float))
-            ):
-                raise TypeError(
-                    "`moves` must be a list of (Move, weight) tuples; "
-                    f"got entry {entry!r}."
-                )
-            if entry[1] <= 0:
-                raise ValueError(
-                    f"Move weights must be strictly positive; got {entry[1]} "
-                    f"for move {entry[0].name!r}."
-                )
+        self._dispatcher = MoveDispatcher(moves)
 
         super().__init__(
             structure=structure,
@@ -342,34 +326,15 @@ class CustomCanonicalEnsemble(CanonicalEnsemble):  # type: ignore[misc]
             trajectory_write_interval=trajectory_write_interval,
         )
 
-        self._moves: list[Move] = [m for m, _ in moves]
-        self._move_weights: list[float] = [float(w) for _, w in moves]
-        self._total_weight: float = sum(self._move_weights)
-        self._move_accept_counts: Counter[str] = Counter()
-        self._move_reject_counts: Counter[str] = Counter()
-        self._move_null_counts: Counter[str] = Counter()
-        # Snapshots taken at each `_get_ensemble_data` call so the
-        # data-container column reports per-interval (not cumulative)
-        # acceptance, matching mchammer's `acceptance_ratio` convention.
-        self._last_recorded_accept_counts: Counter[str] = Counter()
-        self._last_recorded_reject_counts: Counter[str] = Counter()
-        self._last_recorded_null_counts: Counter[str] = Counter()
-
-        names = [m.name for m in self._moves]
-        if len(set(names)) != len(names):
-            raise ValueError(
-                f"Move names must be unique for per-move tracking; got {names}."
-            )
-
     @property
     def moves(self) -> list[Move]:
         """Copy of the moves registered with the ensemble."""
-        return list(self._moves)
+        return self._dispatcher.moves
 
     @property
     def move_weights(self) -> list[float]:
         """The (un-normalised) weights for each registered move."""
-        return list(self._move_weights)
+        return self._dispatcher.move_weights
 
     def _do_trial_step(self) -> int:
         """Carry out one Monte Carlo trial step.
@@ -392,44 +357,23 @@ class CustomCanonicalEnsemble(CanonicalEnsemble):  # type: ignore[misc]
         is reproducible from the ensemble's seeded RNG stream and
         survives `mchammer_pt`'s per-replica RNG isolation.
         """
-        move = self._weighted_move_choice()
+        move = self._dispatcher.choose(self._next_random_number)
         proposal = move.propose(self.configuration, self._next_random_number)
         if proposal is None:
-            self._move_null_counts[move.name] += 1
+            self._dispatcher.record_null(move.name)
             return 0
         sites, species = proposal
         potential_diff = self._get_property_change(sites, species)
         if self._acceptance_condition(potential_diff):
             self.update_occupations(sites, species)
-            self._move_accept_counts[move.name] += 1
+            self._dispatcher.record_accept(move.name)
             return 1
-        self._move_reject_counts[move.name] += 1
+        self._dispatcher.record_reject(move.name)
         return 0
-
-    def _weighted_move_choice(self) -> Move:
-        """Pick a move by weight, drawing from the seeded RNG stream."""
-        threshold = self._next_random_number() * self._total_weight
-        acc = 0.0
-        # Linear scan; the move count is small (typically 2-5) and the
-        # extra clarity beats bisect-on-cumulative-weights at this size.
-        for move, weight in zip(self._moves, self._move_weights, strict=True):
-            acc += weight
-            if threshold < acc:
-                return move
-        # Floating-point edge case: threshold slipped past the final
-        # cumulative sum. Fall through to the last move.
-        return self._moves[-1]
 
     def acceptance_rates(self) -> dict[str, MoveStats]:
         """Return per-move acceptance statistics, keyed by move name."""
-        return {
-            move.name: MoveStats(
-                accepted=self._move_accept_counts[move.name],
-                rejected=self._move_reject_counts[move.name],
-                null_proposed=self._move_null_counts[move.name],
-            )
-            for move in self._moves
-        }
+        return self._dispatcher.acceptance_rates()
 
     def _get_ensemble_data(self) -> dict[str, float]:
         """Extend the standard ensemble-data dict with per-move stats.
@@ -452,49 +396,7 @@ class CustomCanonicalEnsemble(CanonicalEnsemble):  # type: ignore[misc]
         data-container fields are per-interval.
         """
         data = super()._get_ensemble_data()
-        for move in self._moves:
-            cum_accepted = self._move_accept_counts[move.name]
-            cum_rejected = self._move_reject_counts[move.name]
-            cum_null = self._move_null_counts[move.name]
-            interval_accepted = (
-                cum_accepted - self._last_recorded_accept_counts[move.name]
-            )
-            interval_rejected = (
-                cum_rejected - self._last_recorded_reject_counts[move.name]
-            )
-            interval_null = (
-                cum_null - self._last_recorded_null_counts[move.name]
-            )
-            if (
-                interval_accepted < 0
-                or interval_rejected < 0
-                or interval_null < 0
-            ):
-                # Should be unreachable: the cumulative counters only
-                # ever increase, and snapshots are taken from them.
-                # A negative interval delta means a snapshot was not
-                # cleared in step with its cumulative counter — most
-                # commonly a refactor of `reset_acceptance_counts`
-                # that forgot one of the `_last_recorded_*` Counters.
-                raise RuntimeError(
-                    f"Per-interval counter went negative for move "
-                    f"{move.name!r}: accepted={interval_accepted}, "
-                    f"rejected={interval_rejected}, null={interval_null}. "
-                    "This indicates a snapshot counter was not cleared "
-                    "alongside its cumulative counter."
-                )
-            interval_proposed = interval_accepted + interval_rejected + interval_null
-            if interval_proposed > 0:
-                data[f"{move.name}_acceptance_rate"] = (
-                    interval_accepted / interval_proposed
-                )
-                data[f"{move.name}_null_rate"] = interval_null / interval_proposed
-            else:
-                data[f"{move.name}_acceptance_rate"] = 0.0
-                data[f"{move.name}_null_rate"] = 0.0
-            self._last_recorded_accept_counts[move.name] = cum_accepted
-            self._last_recorded_reject_counts[move.name] = cum_rejected
-            self._last_recorded_null_counts[move.name] = cum_null
+        data.update(self._dispatcher.get_interval_data())
         return data
 
     def reset_acceptance_counts(self) -> None:
@@ -508,9 +410,4 @@ class CustomCanonicalEnsemble(CanonicalEnsemble):  # type: ignore[misc]
         Useful for separating equilibration and production statistics.
         Does not affect the inherited global counters.
         """
-        self._move_accept_counts.clear()
-        self._move_reject_counts.clear()
-        self._move_null_counts.clear()
-        self._last_recorded_accept_counts.clear()
-        self._last_recorded_reject_counts.clear()
-        self._last_recorded_null_counts.clear()
+        self._dispatcher.reset()
