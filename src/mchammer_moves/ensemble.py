@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 from ase import Atoms
 from ase.units import kB
 from mchammer.calculators.base_calculator import BaseCalculator
-from mchammer.ensembles import CanonicalEnsemble
+from mchammer.ensembles import CanonicalEnsemble, WangLandauEnsemble
 
 from mchammer_moves.moves.base import Move
 
@@ -411,3 +411,249 @@ class CustomCanonicalEnsemble(CanonicalEnsemble):  # type: ignore[misc]
         Does not affect the inherited global counters.
         """
         self._dispatcher.reset()
+
+
+class CustomWangLandauEnsemble(WangLandauEnsemble):  # type: ignore[misc]
+    """Wang-Landau ensemble parameterised by an arbitrary list of moves.
+
+    Drop-in replacement for :class:`mchammer.ensembles.WangLandauEnsemble`
+    that overrides :meth:`_do_trial_step` to draw a move from a
+    user-supplied weighted list. Same composition pattern as
+    :class:`CustomCanonicalEnsemble`: holds a :class:`MoveDispatcher`
+    instance and delegates move selection and per-move bookkeeping to it.
+
+    In addition to the accept/reject/null counters shared with the
+    canonical adapter, this class classifies rejections as
+    *window-rejected* (the proposed energy fell outside the energy
+    window) or *WL-rejected* (in-window but rejected by the WL
+    entropy criterion). Classification is only performed once the
+    walker has reached the energy window; pre-window search-phase
+    rejections are counted in the aggregate reject counter but not
+    broken down further.
+
+    Parameters
+    ----------
+    structure
+        Atomic configuration; defines the initial occupation vector.
+    calculator
+        Energy calculator (typically a
+        :class:`ClusterExpansionCalculator`).
+    energy_spacing
+        Bin size of the energy grid for the microcanonical entropy.
+    moves
+        List of ``(move, weight)`` tuples. Weights need not sum to one;
+        they are used as relative weights.
+    energy_limit_left
+        Lower bound of the energy window (``None`` for unbounded).
+    energy_limit_right
+        Upper bound of the energy window (``None`` for unbounded).
+    fill_factor_limit
+        Terminate when the fill factor falls below this value.
+    flatness_check_interval
+        MC steps between flatness checks. Default: 1000 sweeps.
+    flatness_limit
+        Histogram flatness threshold.
+    window_search_penalty
+        Penalty strength for the pre-window distance heuristic.
+    user_tag
+        Human-readable tag.
+    dc_filename
+        Path for the data container file.
+    data_container
+        Existing data container to resume from.
+    random_seed
+        Seed for the Monte Carlo RNG.
+    data_container_write_period
+        Seconds between data container writes to disk.
+    ensemble_data_write_interval
+        MC steps between data container row writes.
+    trajectory_write_interval
+        MC steps between trajectory snapshots.
+    schedule
+        Fill-factor update schedule: ``'halving'`` or ``'1_over_t'``.
+    switch_mode
+        When to switch to 1/t phase: ``'bp'`` or
+        ``'after_first_halving'``. Only valid with
+        ``schedule='1_over_t'``.
+    entropy_reset_on_switch
+        Reset entropy to zero on 1/t switch. Only valid with
+        ``schedule='1_over_t'``.
+
+    Notes
+    -----
+    The ``trial_move`` and ``sublattice_probabilities`` arguments of
+    ``WangLandauEnsemble`` are not exposed. Sublattice selection is the
+    responsibility of each :class:`Move`, and ``self.do_move`` is never
+    called because ``_do_trial_step`` is overridden.
+    """
+
+    def __init__(
+        self,
+        structure: Atoms,
+        calculator: BaseCalculator,
+        energy_spacing: float,
+        moves: list[tuple[Move, float]],
+        energy_limit_left: float | None = None,
+        energy_limit_right: float | None = None,
+        fill_factor_limit: float = 1e-6,
+        flatness_check_interval: int | None = None,
+        flatness_limit: float = 0.8,
+        window_search_penalty: float = 2.0,
+        user_tag: str | None = None,
+        dc_filename: str | None = None,
+        data_container: str | None = None,
+        random_seed: int | None = None,
+        data_container_write_period: float = 600,
+        ensemble_data_write_interval: int | None = None,
+        trajectory_write_interval: int | None = None,
+        schedule: str = "halving",
+        switch_mode: str | None = None,
+        entropy_reset_on_switch: bool | None = None,
+    ) -> None:
+        self._dispatcher = MoveDispatcher(moves)
+
+        super().__init__(
+            structure=structure,
+            calculator=calculator,
+            energy_spacing=energy_spacing,
+            trial_move="swap",  # unused; our _do_trial_step overrides
+            energy_limit_left=energy_limit_left,
+            energy_limit_right=energy_limit_right,
+            fill_factor_limit=fill_factor_limit,
+            flatness_check_interval=flatness_check_interval,
+            flatness_limit=flatness_limit,
+            window_search_penalty=window_search_penalty,
+            user_tag=user_tag,
+            dc_filename=dc_filename,
+            data_container=data_container,
+            random_seed=random_seed,
+            data_container_write_period=data_container_write_period,
+            ensemble_data_write_interval=ensemble_data_write_interval,
+            trajectory_write_interval=trajectory_write_interval,
+            schedule=schedule,
+            switch_mode=switch_mode,
+            entropy_reset_on_switch=entropy_reset_on_switch,
+        )
+
+        self._window_reject_counts: Counter[str] = Counter()
+        self._wl_reject_counts: Counter[str] = Counter()
+        self._last_recorded_window_reject: Counter[str] = Counter()
+        self._last_recorded_wl_reject: Counter[str] = Counter()
+        self._last_window_allowed: bool | None = None
+
+    @property
+    def moves(self) -> list[Move]:
+        """Copy of the moves registered with the ensemble."""
+        return self._dispatcher.moves
+
+    @property
+    def move_weights(self) -> list[float]:
+        """The (un-normalised) weights for each registered move."""
+        return self._dispatcher.move_weights
+
+    def _allow_move(self, bin_cur: int | None, bin_new: int) -> bool:
+        """Capture the window decision for rejection classification.
+
+        ``WangLandauEnsemble._acceptance_condition`` calls this
+        internally to decide whether a proposed energy bin is within
+        the window. The override records the decision so that
+        ``_do_trial_step`` can classify a rejection as
+        window-rejected or WL-rejected.
+        """
+        result = super()._allow_move(bin_cur, bin_new)
+        self._last_window_allowed = result
+        return result
+
+    def _do_trial_step(self) -> int:
+        """Carry out one Wang-Landau trial step with custom moves.
+
+        Same dispatch skeleton as :class:`CustomCanonicalEnsemble`:
+        picks a move by weight, asks it for a proposal, evaluates the
+        energy change, and applies the WL acceptance condition.
+
+        Rejection classification (window vs WL) is only performed once
+        the walker has reached the energy window. During the pre-window
+        search phase, ``_acceptance_condition`` uses a distance-penalty
+        heuristic that does not call ``_allow_move``, so
+        ``_last_window_allowed`` stays ``None``. Pre-window rejections
+        are counted in the aggregate reject counter but not broken down.
+        """
+        move = self._dispatcher.choose(self._next_random_number)
+        proposal = move.propose(self.configuration, self._next_random_number)
+        if proposal is None:
+            self._dispatcher.record_null(move.name)
+            return 0
+        sites, species = proposal
+        potential_diff = self._get_property_change(sites, species)
+        self._last_window_allowed = None
+        if self._acceptance_condition(potential_diff):
+            self.update_occupations(sites, species)
+            self._dispatcher.record_accept(move.name)
+            return 1
+        self._dispatcher.record_reject(move.name)
+        if self._reached_energy_window:
+            if self._last_window_allowed is False:
+                self._window_reject_counts[move.name] += 1
+            else:
+                self._wl_reject_counts[move.name] += 1
+        return 0
+
+    def acceptance_rates(self) -> dict[str, MoveStats]:
+        """Return per-move acceptance statistics, keyed by move name."""
+        return self._dispatcher.acceptance_rates()
+
+    def rejection_breakdown(self) -> dict[str, tuple[int, int]]:
+        """Return per-move (window_rejected, wl_rejected) counts.
+
+        The two counts are a finer breakdown of in-window rejections
+        only. Their sum may be less than ``MoveStats.rejected``
+        because pre-window search-phase rejections are not classified.
+        """
+        return {
+            move.name: (
+                self._window_reject_counts[move.name],
+                self._wl_reject_counts[move.name],
+            )
+            for move in self._dispatcher.moves
+        }
+
+    def _get_ensemble_data(self) -> dict[str, float]:
+        """Extend the standard ensemble-data dict with per-move stats.
+
+        Adds four keys per registered move:
+        ``<move>_acceptance_rate``, ``<move>_null_rate`` (from the
+        dispatcher), ``<move>_window_rejection_rate``, and
+        ``<move>_wl_rejection_rate`` (WL-specific, per-interval).
+        """
+        data = super()._get_ensemble_data()
+        data.update(self._dispatcher.get_interval_data())
+        for move in self._dispatcher.moves:
+            name = move.name
+            cum_window = self._window_reject_counts[name]
+            cum_wl = self._wl_reject_counts[name]
+            interval_window = (
+                cum_window - self._last_recorded_window_reject[name]
+            )
+            interval_wl = cum_wl - self._last_recorded_wl_reject[name]
+            interval_classified = interval_window + interval_wl
+            if interval_classified > 0:
+                data[f"{name}_window_rejection_rate"] = (
+                    interval_window / interval_classified
+                )
+                data[f"{name}_wl_rejection_rate"] = (
+                    interval_wl / interval_classified
+                )
+            else:
+                data[f"{name}_window_rejection_rate"] = 0.0
+                data[f"{name}_wl_rejection_rate"] = 0.0
+            self._last_recorded_window_reject[name] = cum_window
+            self._last_recorded_wl_reject[name] = cum_wl
+        return data
+
+    def reset_acceptance_counts(self) -> None:
+        """Zero all per-move counters including WL-specific ones."""
+        self._dispatcher.reset()
+        self._window_reject_counts.clear()
+        self._wl_reject_counts.clear()
+        self._last_recorded_window_reject.clear()
+        self._last_recorded_wl_reject.clear()
