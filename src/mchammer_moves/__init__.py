@@ -1,7 +1,9 @@
 """Custom Monte Carlo moves for icet/mchammer.
 
 Provides a small framework for plugging user-defined trial moves into
-mchammer canonical sampling. The package exposes:
+mchammer sampling. The :class:`Move` base class defines a
+sampler-agnostic proposal contract; ensemble adapters consume moves
+and handle acceptance, bookkeeping, and data-container integration:
 
 * :class:`Move` — abstract base class for trial moves.
 * :class:`PairSwap` — standard two-site canonical swap on a sublattice.
@@ -19,9 +21,14 @@ mchammer canonical sampling. The package exposes:
 * :class:`IndexSetSwap` — generic group-permutation primitive that
   swaps occupations between two equal-length index sets drawn
   uniformly from a user-supplied list.
+* :class:`MoveDispatcher` — weighted move selection and per-move
+  bookkeeping, used internally by ensemble adapters.
 * :class:`CustomCanonicalEnsemble` — drop-in replacement for
   :class:`mchammer.ensembles.CanonicalEnsemble` that draws moves from a
   user-supplied weighted list and tracks per-move acceptance.
+* :class:`CustomWangLandauEnsemble` — drop-in replacement for
+  :class:`mchammer.ensembles.WangLandauEnsemble` with the same
+  weighted-move dispatch, plus window-vs-WL rejection classification.
 """
 
 from mchammer_moves.ensemble import (
