@@ -11,10 +11,10 @@ from ase.units import kB
 from mchammer.calculators.base_calculator import BaseCalculator
 from mchammer.ensembles import CanonicalEnsemble
 
+from mchammer_moves.moves.base import Move
+
 if TYPE_CHECKING:
     from collections.abc import Callable
-
-    from mchammer_moves.moves.base import Move
 
 
 @dataclass(frozen=True)
@@ -83,7 +83,7 @@ class MoveDispatcher:
     ----------
     moves
         List of ``(move, weight)`` tuples. Weights need not sum to one;
-        they are normalised internally. Move names must be unique
+        they are used as relative weights. Move names must be unique
         (per-move tracking keys on name).
 
     Raises
@@ -104,6 +104,7 @@ class MoveDispatcher:
             if (
                 not isinstance(entry, tuple)
                 or len(entry) != 2
+                or not isinstance(entry[0], Move)
                 or not isinstance(entry[1], (int, float))
             ):
                 raise TypeError(
