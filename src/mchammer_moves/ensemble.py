@@ -528,6 +528,11 @@ class CustomWangLandauEnsemble(WangLandauEnsemble):  # type: ignore[misc]
         entropy_reset_on_switch: bool | None = None,
     ) -> None:
         self._dispatcher = MoveDispatcher(moves)
+        self._window_reject_counts: Counter[str] = Counter()
+        self._wl_reject_counts: Counter[str] = Counter()
+        self._last_recorded_window_reject: Counter[str] = Counter()
+        self._last_recorded_wl_reject: Counter[str] = Counter()
+        self._last_window_allowed: bool | None = None
 
         super().__init__(
             structure=structure,
@@ -552,12 +557,6 @@ class CustomWangLandauEnsemble(WangLandauEnsemble):  # type: ignore[misc]
             entropy_reset_on_switch=entropy_reset_on_switch,
         )
 
-        self._window_reject_counts: Counter[str] = Counter()
-        self._wl_reject_counts: Counter[str] = Counter()
-        self._last_recorded_window_reject: Counter[str] = Counter()
-        self._last_recorded_wl_reject: Counter[str] = Counter()
-        self._last_window_allowed: bool | None = None
-
     @property
     def moves(self) -> list[Move]:
         """Copy of the moves registered with the ensemble."""
@@ -578,6 +577,12 @@ class CustomWangLandauEnsemble(WangLandauEnsemble):  # type: ignore[misc]
         value so that ``_do_trial_step`` can classify a rejection as
         window-blocked or WL-rejected after
         ``_acceptance_condition`` returns.
+
+        The classification relies on ``_acceptance_condition`` calling
+        ``_allow_move`` exactly once per invocation. This holds for the
+        current ``WangLandauEnsemble`` implementation, where
+        ``_allow_move`` is the documented subclass hook for
+        window-membership decisions.
         """
         result = super()._allow_move(bin_cur, bin_new)
         self._last_window_allowed = result
