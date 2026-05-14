@@ -158,6 +158,12 @@ recorded into the `WangLandauDataContainer` at every
 `<move>_wl_rejection_rate` columns. The `rejection_breakdown()` method
 provides cumulative window-vs-WL rejection counts for interactive use.
 
+`<move>_acceptance_rate` and `<move>_null_rate` use total proposals
+(accepted + rejected + null) as the denominator. `<move>_window_rejection_rate`
+and `<move>_wl_rejection_rate` use classified in-window rejections as the
+denominator — they do not share a denominator with the first two columns and
+do not sum with them to any fixed value.
+
 Rejection classification is only performed once the walker has reached
 the energy window. Pre-window search-phase rejections are counted in the
 aggregate `MoveStats.rejected` counter but not broken down further.

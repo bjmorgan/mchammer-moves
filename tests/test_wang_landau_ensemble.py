@@ -122,9 +122,11 @@ def test_wl_window_rejection_classification(small_ising_setup):
     # With a very tight window, most non-null proposals should be
     # window-rejected.
     assert window_rej > 0, "Expected some window rejections with tight bounds"
-    # window + wl should not exceed total rejected (pre-window
-    # rejections are not classified).
-    assert window_rej + wl_rej <= stats.rejected
+    # The initial configuration is inside the window, so
+    # _reached_energy_window becomes True on the very first
+    # _acceptance_condition call. All rejections are therefore
+    # classified; no pre-window rejections can occur.
+    assert window_rej + wl_rej == stats.rejected
 
 
 def test_wl_data_container_columns(small_ising_setup):
@@ -220,3 +222,94 @@ def test_wl_run_method_works(small_ising_setup):
     ensemble.run(n)
     rates = ensemble.acceptance_rates()
     assert rates["pair_swap"].proposed == n
+
+
+def test_wl_pre_window_rejections_not_classified(small_ising_setup):
+    """Rejections during the pre-window search phase are not classified.
+
+    Placing the energy window far above the starting configuration
+    ensures the walker never reaches the window. The distance-penalty
+    heuristic still rejects some proposals, but because
+    ``_reached_energy_window`` stays ``False``, the window/WL rejection
+    counters must remain at zero.
+    """
+    setup = small_ising_setup
+    calculator = setup["calculator"]
+    structure = setup["structure"]
+    initial_energy = calculator.calculate_total(
+        occupations=list(structure.get_atomic_numbers())
+    )
+    # Window placed far above the initial energy — unreachable in 300 steps.
+    # energy_spacing=0.01 ensures proposals move between distinct bins so
+    # that distance-penalty rejections actually occur.
+    ensemble = CustomWangLandauEnsemble(
+        structure=structure,
+        calculator=calculator,
+        energy_spacing=0.01,
+        moves=[(PairSwap(sublattice_index=0), 1.0)],
+        energy_limit_left=initial_energy + 500.0,
+        energy_limit_right=initial_energy + 600.0,
+        random_seed=99,
+    )
+    n = 300
+    for _ in range(n):
+        ensemble._do_trial_step()
+
+    assert not ensemble._reached_energy_window, (
+        "Walker should not have reached the window"
+    )
+    stats = ensemble.acceptance_rates()["pair_swap"]
+    assert stats.rejected > 0, (
+        "Expected some distance-penalty rejections during pre-window search"
+    )
+    window_rej, wl_rej = ensemble.rejection_breakdown()["pair_swap"]
+    assert window_rej == 0, (
+        "Pre-window rejections must not be classified as window-rejected"
+    )
+    assert wl_rej == 0, (
+        "Pre-window rejections must not be classified as WL-rejected"
+    )
+
+
+def test_wl_post_reset_data_container_rates_non_negative(small_ising_setup):
+    """Data-container rates are non-negative after a mid-run reset.
+
+    Verifies that ``reset_acceptance_counts`` correctly clears the
+    WL-specific snapshot baselines (``_last_recorded_window_reject`` and
+    ``_last_recorded_wl_reject``) alongside the cumulative counters, so
+    that per-interval deltas cannot go negative after the reset.
+    """
+    setup = small_ising_setup
+    calculator = setup["calculator"]
+    structure = setup["structure"]
+    initial_energy = calculator.calculate_total(
+        occupations=list(structure.get_atomic_numbers())
+    )
+    # Tight window so window/WL rejections accumulate quickly.
+    ensemble = CustomWangLandauEnsemble(
+        structure=structure,
+        calculator=calculator,
+        energy_spacing=0.01,
+        moves=[(PairSwap(sublattice_index=0), 1.0)],
+        energy_limit_left=initial_energy - 0.01,
+        energy_limit_right=initial_energy + 0.01,
+        random_seed=77,
+    )
+    # Phase 1: accumulate counts and advance the snapshot baselines.
+    for _ in range(100):
+        ensemble._do_trial_step()
+    ensemble._get_ensemble_data()
+
+    # Reset all counters (cumulative and snapshot baselines).
+    ensemble.reset_acceptance_counts()
+
+    # Phase 2: run more steps.
+    for _ in range(100):
+        ensemble._do_trial_step()
+
+    # _get_ensemble_data must not produce negative rates — a negative
+    # rate would indicate that a snapshot baseline was not cleared
+    # alongside its cumulative counter during reset.
+    data = ensemble._get_ensemble_data()
+    assert data["pair_swap_window_rejection_rate"] >= 0.0
+    assert data["pair_swap_wl_rejection_rate"] >= 0.0

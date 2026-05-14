@@ -21,23 +21,24 @@ if TYPE_CHECKING:
 class MoveStats:
     """Per-move acceptance statistics returned by `acceptance_rates`.
 
-    Args:
-        accepted: Number of proposals accepted by the Metropolis
-            criterion.
-        rejected: Number of proposals evaluated for energy and
-            rejected by the Metropolis criterion.
-        null_proposed: Number of trials where the move returned
-            ``None`` (no candidate proposed, no energy evaluation).
-            Examples: a `PairSwap` on a single-species sublattice;
-            a `MultiPairSwap` on a sublattice with fewer than ``k``
-            of the minority species; an `IndexSetSwap` whose drawn
-            pair already holds identical occupations (or, with
-            ``require_matching_composition=True``, has mismatched
-            composition). A move with ``accepted == 0`` and
-            ``null_rate == 1`` is structurally infeasible on the
-            current configuration and will never advance the chain
-            until either the configuration or the move's
-            constraints change.
+    Parameters
+    ----------
+    accepted
+        Number of proposals accepted by the Metropolis criterion.
+    rejected
+        Number of proposals evaluated for energy and rejected by the
+        Metropolis criterion.
+    null_proposed
+        Number of trials where the move returned ``None`` (no candidate
+        proposed, no energy evaluation). Examples: a `PairSwap` on a
+        single-species sublattice; a `MultiPairSwap` on a sublattice
+        with fewer than ``k`` of the minority species; an
+        `IndexSetSwap` whose drawn pair already holds identical
+        occupations (or, with ``require_matching_composition=True``,
+        has mismatched composition). A move with ``accepted == 0`` and
+        ``null_rate == 1`` is structurally infeasible on the current
+        configuration and will never advance the chain until either the
+        configuration or the move's constraints change.
 
     The ``proposed``, ``acceptance_rate``, and ``null_rate``
     properties are computed from these counters.
@@ -145,8 +146,22 @@ class MoveDispatcher:
         return list(self._move_weights)
 
     def choose(self, next_random_number: Callable[[], float]) -> Move:
-        """Pick a move by weight.
+        """Select and return one registered move, sampled by weight.
 
+        Parameters
+        ----------
+        next_random_number
+            Zero-argument callable returning a uniform float in
+            ``[0, 1)``. Draws one value to perform the weighted
+            selection.
+
+        Returns
+        -------
+        Move
+            The selected move.
+
+        Notes
+        -----
         Linear scan; the move count is small (typically 2-5) and the
         extra clarity beats bisect-on-cumulative-weights at this size.
         """
@@ -554,11 +569,13 @@ class CustomWangLandauEnsemble(WangLandauEnsemble):  # type: ignore[misc]
     def _allow_move(self, bin_cur: int | None, bin_new: int) -> bool:
         """Capture the window decision for rejection classification.
 
-        ``WangLandauEnsemble._acceptance_condition`` calls this
-        internally to decide whether a proposed energy bin is within
-        the window. The override records the decision so that
-        ``_do_trial_step`` can classify a rejection as
-        window-rejected or WL-rejected.
+        ``WangLandauEnsemble._acceptance_condition`` calls this to gate
+        histogram and entropy accumulation — it returns ``False`` when a
+        proposed move would take the walker outside the defined energy
+        window, blocking that move. The override records the return
+        value so that ``_do_trial_step`` can classify a rejection as
+        window-blocked or WL-rejected after
+        ``_acceptance_condition`` returns.
         """
         result = super()._allow_move(bin_cur, bin_new)
         self._last_window_allowed = result
@@ -572,12 +589,12 @@ class CustomWangLandauEnsemble(WangLandauEnsemble):  # type: ignore[misc]
         energy change, and applies the WL acceptance condition.
 
         Rejection classification (window vs WL) is gated on
-        ``self._reached_energy_window``. Pre-window rejections bypass
-        the classification block and are counted only in the aggregate
-        reject counter. On a rejected trial step the walker's bin does
-        not change, so ``_reached_energy_window`` cannot transition to
-        ``True`` mid-step; the gate is therefore safe to evaluate after
-        ``_acceptance_condition`` returns.
+        ``self._reached_energy_window``, read after
+        ``_acceptance_condition`` returns so it reflects any transition
+        that occurred inside it. ``_last_window_allowed`` is set by the
+        ``_allow_move`` override on every call, so it always holds the
+        correct window decision for the rejected proposal when the gate
+        fires.
         """
         move = self._dispatcher.choose(self._next_random_number)
         proposal = move.propose(self.configuration, self._next_random_number)
@@ -595,7 +612,7 @@ class CustomWangLandauEnsemble(WangLandauEnsemble):  # type: ignore[misc]
         if self._reached_energy_window:
             if self._last_window_allowed is False:
                 self._window_reject_counts[move.name] += 1
-            else:
+            elif self._last_window_allowed is True:
                 self._wl_reject_counts[move.name] += 1
         return 0
 
@@ -606,8 +623,9 @@ class CustomWangLandauEnsemble(WangLandauEnsemble):  # type: ignore[misc]
     def rejection_breakdown(self) -> dict[str, tuple[int, int]]:
         """Return per-move (window_rejected, wl_rejected) counts.
 
-        The two counts are a finer breakdown of in-window rejections
-        only. Their sum may be less than ``MoveStats.rejected``
+        A rejected trial is counted in exactly one of the two
+        categories. The two counts together cover only in-window
+        rejections; their sum may be less than ``MoveStats.rejected``
         because pre-window search-phase rejections are not classified.
         """
         return {
@@ -622,9 +640,18 @@ class CustomWangLandauEnsemble(WangLandauEnsemble):  # type: ignore[misc]
         """Extend the standard ensemble-data dict with per-move stats.
 
         Adds four keys per registered move:
-        ``<move>_acceptance_rate``, ``<move>_null_rate`` (from the
-        dispatcher), ``<move>_window_rejection_rate``, and
-        ``<move>_wl_rejection_rate`` (WL-specific, per-interval).
+
+        ``<move>_acceptance_rate``, ``<move>_null_rate``
+            Per-interval rates from the dispatcher; denominator is
+            total proposals (accepted + rejected + null) in the
+            interval.
+        ``<move>_window_rejection_rate``, ``<move>_wl_rejection_rate``
+            Per-interval rates among *classified* rejections only
+            (window-blocked + WL-rejected in the interval). A
+            rejection is classified only once the walker has reached
+            the energy window, so these rates do not sum with
+            ``<move>_acceptance_rate`` and ``<move>_null_rate`` to
+            any fixed value.
         """
         data = super()._get_ensemble_data()
         data.update(self._dispatcher.get_interval_data())
