@@ -40,6 +40,8 @@ class MoveStats:
         configuration and will never advance the chain until either the
         configuration or the move's constraints change.
 
+    Notes
+    -----
     The ``proposed``, ``acceptance_rate``, and ``null_rate``
     properties are computed from these counters.
     """
