@@ -12,6 +12,8 @@ from mchammer.calculators.base_calculator import BaseCalculator
 from mchammer.ensembles import CanonicalEnsemble
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from mchammer_moves.moves.base import Move
 
 
@@ -66,6 +68,176 @@ class MoveStats:
         sublattice composition or filter constraints in use.
         """
         return self.null_proposed / self.proposed if self.proposed > 0 else 0.0
+
+
+class MoveDispatcher:
+    """Weighted move selection and per-move bookkeeping.
+
+    Owns the move list, weights, per-move accept/reject/null counters,
+    and per-interval rate computation for data-container integration.
+    Ensemble adapters hold a ``MoveDispatcher`` instance and delegate
+    bookkeeping to it; the dispatcher has no knowledge of ensembles,
+    configurations, or energy evaluation.
+
+    Parameters
+    ----------
+    moves
+        List of ``(move, weight)`` tuples. Weights need not sum to one;
+        they are normalised internally. Move names must be unique
+        (per-move tracking keys on name).
+
+    Raises
+    ------
+    ValueError
+        If ``moves`` is empty, contains non-positive weights, or
+        contains duplicate move names.
+    TypeError
+        If any entry is not a ``(Move, numeric)`` tuple.
+    """
+
+    def __init__(self, moves: list[tuple[Move, float]]) -> None:
+        if not moves:
+            raise ValueError(
+                "`moves` must contain at least one (move, weight) entry."
+            )
+        for entry in moves:
+            if (
+                not isinstance(entry, tuple)
+                or len(entry) != 2
+                or not isinstance(entry[1], (int, float))
+            ):
+                raise TypeError(
+                    "`moves` must be a list of (Move, weight) tuples; "
+                    f"got entry {entry!r}."
+                )
+            if entry[1] <= 0:
+                raise ValueError(
+                    f"Move weights must be strictly positive; got {entry[1]} "
+                    f"for move {entry[0].name!r}."
+                )
+
+        self._moves: list[Move] = [m for m, _ in moves]
+        self._move_weights: list[float] = [float(w) for _, w in moves]
+        self._total_weight: float = sum(self._move_weights)
+
+        names = [m.name for m in self._moves]
+        if len(set(names)) != len(names):
+            raise ValueError(
+                f"Move names must be unique for per-move tracking; got {names}."
+            )
+
+        self._accept_counts: Counter[str] = Counter()
+        self._reject_counts: Counter[str] = Counter()
+        self._null_counts: Counter[str] = Counter()
+        self._last_recorded_accept: Counter[str] = Counter()
+        self._last_recorded_reject: Counter[str] = Counter()
+        self._last_recorded_null: Counter[str] = Counter()
+
+    @property
+    def moves(self) -> list[Move]:
+        """Copy of the registered moves."""
+        return list(self._moves)
+
+    @property
+    def move_weights(self) -> list[float]:
+        """The (un-normalised) weights for each registered move."""
+        return list(self._move_weights)
+
+    def choose(self, next_random_number: Callable[[], float]) -> Move:
+        """Pick a move by weight.
+
+        Linear scan; the move count is small (typically 2-5) and the
+        extra clarity beats bisect-on-cumulative-weights at this size.
+        """
+        threshold = next_random_number() * self._total_weight
+        acc = 0.0
+        for move, weight in zip(
+            self._moves, self._move_weights, strict=True
+        ):
+            acc += weight
+            if threshold < acc:
+                return move
+        # Floating-point edge case: threshold slipped past the final
+        # cumulative sum. Fall through to the last move.
+        return self._moves[-1]
+
+    def record_accept(self, name: str) -> None:
+        """Increment the accept counter for *name*."""
+        self._accept_counts[name] += 1
+
+    def record_reject(self, name: str) -> None:
+        """Increment the reject counter for *name*."""
+        self._reject_counts[name] += 1
+
+    def record_null(self, name: str) -> None:
+        """Increment the null-proposal counter for *name*."""
+        self._null_counts[name] += 1
+
+    def acceptance_rates(self) -> dict[str, MoveStats]:
+        """Return per-move acceptance statistics, keyed by move name."""
+        return {
+            move.name: MoveStats(
+                accepted=self._accept_counts[move.name],
+                rejected=self._reject_counts[move.name],
+                null_proposed=self._null_counts[move.name],
+            )
+            for move in self._moves
+        }
+
+    def get_interval_data(self) -> dict[str, float]:
+        """Return per-interval acceptance and null rates for all moves.
+
+        Computes rates over the trials since the previous call (or
+        since construction / ``reset``), then updates the snapshot
+        baseline. Callers (``_get_ensemble_data`` in ensemble adapters)
+        do not manage snapshots.
+
+        Raises
+        ------
+        RuntimeError
+            If any per-interval delta is negative — indicates a
+            snapshot counter was not cleared alongside its cumulative
+            counter (e.g. a ``reset`` that forgot one counter).
+        """
+        data: dict[str, float] = {}
+        for move in self._moves:
+            name = move.name
+            cum_acc = self._accept_counts[name]
+            cum_rej = self._reject_counts[name]
+            cum_null = self._null_counts[name]
+            interval_acc = cum_acc - self._last_recorded_accept[name]
+            interval_rej = cum_rej - self._last_recorded_reject[name]
+            interval_null = cum_null - self._last_recorded_null[name]
+            if interval_acc < 0 or interval_rej < 0 or interval_null < 0:
+                raise RuntimeError(
+                    f"Per-interval counter went negative for move "
+                    f"{name!r}: accepted={interval_acc}, "
+                    f"rejected={interval_rej}, null={interval_null}. "
+                    "This indicates a snapshot counter was not cleared "
+                    "alongside its cumulative counter."
+                )
+            interval_proposed = interval_acc + interval_rej + interval_null
+            if interval_proposed > 0:
+                data[f"{name}_acceptance_rate"] = (
+                    interval_acc / interval_proposed
+                )
+                data[f"{name}_null_rate"] = interval_null / interval_proposed
+            else:
+                data[f"{name}_acceptance_rate"] = 0.0
+                data[f"{name}_null_rate"] = 0.0
+            self._last_recorded_accept[name] = cum_acc
+            self._last_recorded_reject[name] = cum_rej
+            self._last_recorded_null[name] = cum_null
+        return data
+
+    def reset(self) -> None:
+        """Zero all lifetime counters and snapshot baselines."""
+        self._accept_counts.clear()
+        self._reject_counts.clear()
+        self._null_counts.clear()
+        self._last_recorded_accept.clear()
+        self._last_recorded_reject.clear()
+        self._last_recorded_null.clear()
 
 
 class CustomCanonicalEnsemble(CanonicalEnsemble):  # type: ignore[misc]

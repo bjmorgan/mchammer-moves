@@ -24,7 +24,7 @@ mchammer canonical sampling. The package exposes:
   user-supplied weighted list and tracks per-move acceptance.
 """
 
-from mchammer_moves.ensemble import CustomCanonicalEnsemble, MoveStats
+from mchammer_moves.ensemble import CustomCanonicalEnsemble, MoveDispatcher, MoveStats
 from mchammer_moves.moves.base import Move
 from mchammer_moves.moves.cyclic_reflection import CyclicReflection
 from mchammer_moves.moves.cyclic_shift import CyclicShift
@@ -38,6 +38,7 @@ __all__ = [
     "CyclicShift",
     "IndexSetSwap",
     "Move",
+    "MoveDispatcher",
     "MoveStats",
     "MultiPairSwap",
     "PairSwap",
