@@ -12,7 +12,14 @@ license = "MIT"
 license-files = ["LICENSE"]
 authors = [{ name = "Benjamin J. Morgan", email = "b.j.morgan@bath.ac.uk" }]
 dependencies = [
-    "icet>=2.0",
+    # icet is pinned to the bjmorgan fork on GitLab, which includes the
+    # 1/t Wang-Landau schedule (schedule=, switch_mode=,
+    # entropy_reset_on_switch= parameters). Switch to a plain
+    # `icet>=<version>` specifier once these additions are merged into
+    # the upstream icet release. PyPI does not accept direct-URL
+    # dependencies, so this also gates whether mchammer-moves can be
+    # uploaded to PyPI.
+    "icet @ git+https://gitlab.com/bjmorgan/icet.git@master",
     "numpy",
     "ase",
 ]
