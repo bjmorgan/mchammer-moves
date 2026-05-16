@@ -488,13 +488,6 @@ class CustomWangLandauEnsemble(WangLandauEnsemble):  # type: ignore[misc]
         MC steps between trajectory snapshots.
     schedule
         Fill-factor update schedule: ``'halving'`` or ``'1_over_t'``.
-    switch_mode
-        When to switch to 1/t phase: ``'bp'`` or
-        ``'after_first_halving'``. Only valid with
-        ``schedule='1_over_t'``.
-    entropy_reset_on_switch
-        Reset entropy to zero on 1/t switch. Only valid with
-        ``schedule='1_over_t'``.
 
     Notes
     -----
@@ -524,8 +517,6 @@ class CustomWangLandauEnsemble(WangLandauEnsemble):  # type: ignore[misc]
         ensemble_data_write_interval: int | None = None,
         trajectory_write_interval: int | None = None,
         schedule: str = "halving",
-        switch_mode: str | None = None,
-        entropy_reset_on_switch: bool | None = None,
     ) -> None:
         self._dispatcher = MoveDispatcher(moves)
         self._window_reject_counts: Counter[str] = Counter()
@@ -553,8 +544,6 @@ class CustomWangLandauEnsemble(WangLandauEnsemble):  # type: ignore[misc]
             ensemble_data_write_interval=ensemble_data_write_interval,
             trajectory_write_interval=trajectory_write_interval,
             schedule=schedule,
-            switch_mode=switch_mode,
-            entropy_reset_on_switch=entropy_reset_on_switch,
         )
 
     @property
