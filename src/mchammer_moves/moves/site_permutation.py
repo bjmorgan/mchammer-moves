@@ -14,7 +14,7 @@ rotation) to an index mapping and pass it in.
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NamedTuple
 
 from mchammer_moves.moves.base import Move
 
@@ -22,6 +22,21 @@ if TYPE_CHECKING:
     from mchammer.configuration_manager import ConfigurationManager
 
 OperationInput = Mapping[int, int] | Sequence[tuple[int, int]]
+
+
+class _Operation(NamedTuple):
+    """A validated operation and its precomputed inverse.
+
+    ``support`` is the tuple of moved site indices (the sources, which
+    equal the images for a valid permutation). ``forward`` maps each
+    source to its image; ``inverse`` is the reverse mapping. Both
+    directions are stored so :meth:`SitePermutation.propose` can apply
+    either without recomputing or risking the two getting out of step.
+    """
+
+    support: tuple[int, ...]
+    forward: dict[int, int]
+    inverse: dict[int, int]
 
 
 class SitePermutation(Move):
@@ -37,12 +52,11 @@ class SitePermutation(Move):
     The move is the most general *occupation-permuting* move with a
     detailed-balance guarantee enforced by the move itself. It is
     composition-preserving by construction — permuting occupations
-    cannot change the multiset of species — so it complements rather
-    than replaces :class:`PairSwap`: random pair swaps generate the
-    full symmetric group and do the local ergodic mixing, while
-    ``SitePermutation`` makes large correlated jumps along a chosen
-    operation but reaches only the orbit its supplied operations
-    generate.
+    cannot change the multiset of species. It pairs naturally with
+    :class:`PairSwap`: random pair swaps generate the full symmetric
+    group and do the local ergodic mixing, while ``SitePermutation``
+    makes large correlated jumps along a chosen operation but reaches
+    only the orbit its supplied operations generate.
 
     Each operation is a sparse directed mapping from source site index
     to image site index. The mapping must be a bijection on its support
@@ -59,10 +73,7 @@ class SitePermutation(Move):
     so the total selection weight for transitions :math:`A \\to B`
     equals that for :math:`B \\to A`. Standard Metropolis acceptance
     therefore preserves detailed balance. For an involution
-    :math:`\\sigma^{-1} = \\sigma` the two direction branches coincide;
-    the direction draw is performed unconditionally regardless, because
-    skipping it would silently break detailed balance for any
-    non-involution operation.
+    :math:`\\sigma^{-1} = \\sigma` the two direction branches coincide.
 
     Parameters
     ----------
@@ -108,9 +119,7 @@ class SitePermutation(Move):
     ) -> None:
         if len(operations) == 0:
             raise ValueError("`operations` must contain at least one operation.")
-        materialised: list[
-            tuple[tuple[int, ...], dict[int, int], dict[int, int]]
-        ] = []
+        materialised: list[_Operation] = []
         for idx, op in enumerate(operations):
             raw_items = op.items() if isinstance(op, Mapping) else op
             items = [tuple(r) for r in raw_items]
@@ -153,7 +162,7 @@ class SitePermutation(Move):
                 )
             inverse = {image: source for source, image in forward.items()}
             support = tuple(forward.keys())
-            materialised.append((support, forward, inverse))
+            materialised.append(_Operation(support, forward, inverse))
         super().__init__(name)
         self._operations = materialised
 
@@ -164,7 +173,7 @@ class SitePermutation(Move):
         Mutating the returned list or its dicts does not affect the
         move's internal state.
         """
-        return [dict(forward) for _, forward, _ in self._operations]
+        return [dict(op.forward) for op in self._operations]
 
     @property
     def n_operations(self) -> int:
@@ -188,15 +197,15 @@ class SitePermutation(Move):
         # for K far below 2^52, which holds for any realistic operation
         # count.
         k = int(next_random_number() * len(self._operations))
-        support, forward, inverse = self._operations[k]
+        operation = self._operations[k]
         # The direction draw is unconditional: skipping it for operations
         # that happen to be involutions would silently break detailed
         # balance for any non-involution operation.
-        sigma = forward if next_random_number() < 0.5 else inverse
+        sigma = operation.forward if next_random_number() < 0.5 else operation.inverse
 
         occupations = configuration.occupations
-        new_species = [int(occupations[sigma[i]]) for i in support]
-        current_species = [int(occupations[i]) for i in support]
+        new_species = [int(occupations[sigma[i]]) for i in operation.support]
+        current_species = [int(occupations[i]) for i in operation.support]
         if new_species == current_species:
             return None
-        return list(support), new_species
+        return list(operation.support), new_species

@@ -234,10 +234,7 @@ geometry and composition, not on the current configuration:
 - `SitePermutation`: an operation is drawn uniformly from the fixed
   list, then applied forward or inverted, each with probability one
   half. The applied-permutation multiset is closed under inversion with
-  equal weights, so `P(A → B) = P(B → A)` for any permutation. Applying
-  the inverse with equal probability is what keeps the symmetry valid
-  for a list mixing involutions (reflections, point inversion) with
-  non-involutions (rotations).
+  equal weights, so `P(A → B) = P(B → A)` for any permutation.
 
 Standard Metropolis acceptance therefore satisfies detailed balance for any
 weighted combination of these moves. A symmetry test that empirically

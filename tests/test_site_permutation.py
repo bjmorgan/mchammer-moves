@@ -58,6 +58,11 @@ def test_site_permutation_rejects_explicit_fixed_point():
         SitePermutation(operations=[{0: 0}])
 
 
+def test_site_permutation_rejects_non_pair_entry():
+    with pytest.raises(ValueError, match=r"\(source, image\) pair"):
+        SitePermutation(operations=[[(0, 1), (2,)]])
+
+
 def test_site_permutation_rejects_duplicate_source():
     with pytest.raises(ValueError, match="source more than once"):
         SitePermutation(operations=[[(0, 1), (0, 2), (1, 0)]])
