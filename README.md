@@ -25,6 +25,11 @@ The package provides:
   - `IndexSetSwap` — swaps occupations between two equal-length index
     sets drawn uniformly from a user-supplied list of groups; a
     generic primitive for chain-, motif-, or layer-swap moves;
+  - `SitePermutation` — applies a caller-supplied permutation of site
+    occupations, drawn uniformly from a list of operations, with an
+    unconditional forward/inverse direction draw; covers reflections
+    (e.g. across a `<100>` plane), point inversion, and proper or
+    improper rotations of any order;
 - `CustomCanonicalEnsemble`, a drop-in replacement for
   `mchammer.ensembles.CanonicalEnsemble` that draws moves from a
   user-supplied weighted list and tracks per-move acceptance;
@@ -226,6 +231,13 @@ geometry and composition, not on the current configuration:
   contents, so the multiset of compositions held across the groups
   is invariant under the move, and a pair filtered out in one
   direction is also filtered out in the other.
+- `SitePermutation`: an operation is drawn uniformly from the fixed
+  list, then applied forward or inverted, each with probability one
+  half. The applied-permutation multiset is closed under inversion with
+  equal weights, so `P(A → B) = P(B → A)` for any permutation, not
+  just involutions. The direction draw is unconditional — it is not
+  skipped for involutions — so the guarantee holds when the list mixes
+  reflections with rotations.
 
 Standard Metropolis acceptance therefore satisfies detailed balance for any
 weighted combination of these moves. A symmetry test that empirically

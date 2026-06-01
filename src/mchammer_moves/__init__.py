@@ -21,6 +21,10 @@ and handle acceptance, bookkeeping, and data-container integration:
 * :class:`IndexSetSwap` — generic group-permutation primitive that
   swaps occupations between two equal-length index sets drawn
   uniformly from a user-supplied list.
+* :class:`SitePermutation` — applies a caller-supplied permutation of
+  site occupations (reflections, point inversion, rotations) drawn
+  uniformly from a list, with an unconditional forward/inverse
+  direction draw so detailed balance holds for non-involutions too.
 * :class:`MoveDispatcher` — weighted move selection and per-move
   bookkeeping, used internally by ensemble adapters.
 * :class:`CustomCanonicalEnsemble` — drop-in replacement for
