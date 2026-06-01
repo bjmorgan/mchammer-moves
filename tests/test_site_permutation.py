@@ -12,6 +12,7 @@ Covers:
 
 from __future__ import annotations
 
+from itertools import permutations
 from unittest.mock import MagicMock
 
 import numpy as np
@@ -147,3 +148,90 @@ def test_site_permutation_dispatches_across_operations_and_directions():
     # distinct rotated patterns.
     assert len(patterns_op0) == 2, patterns_op0
     assert len(patterns_op1) == 2, patterns_op1
+
+
+def _detailed_balance_failures(move, support, states, n_per, seed):
+    """Run an enumerate-and-count symmetry check; return 4-sigma failures.
+
+    ``states`` is a list of local occupation tuples over ``support``
+    (in support order). Forces each state in turn, counts proposed
+    transitions, and returns the list of state pairs whose
+    transition-count asymmetry exceeds a 4-sigma z-score.
+    """
+    state_index = {s: i for i, s in enumerate(states)}
+    n_sites = max(support) + 1
+    transitions = np.zeros((len(states), len(states)), dtype=int)
+    rng = seeded_uniform(seed)
+    for src in states:
+        occ = [0] * n_sites
+        for site, sp in zip(support, src, strict=True):
+            occ[site] = sp
+        config = _make_fake_configuration(occ)
+        for _ in range(n_per):
+            result = move.propose(config, rng)
+            if result is None:
+                transitions[state_index[src], state_index[src]] += 1
+                continue
+            sites, species = result
+            cand = list(config.occupations)
+            for s, z in zip(sites, species, strict=True):
+                cand[s] = z
+            dst = tuple(int(cand[site]) for site in support)
+            transitions[state_index[src], state_index[dst]] += 1
+
+    failures = []
+    for i in range(len(states)):
+        for j in range(i + 1, len(states)):
+            a, b = transitions[i, j], transitions[j, i]
+            if a + b < 30:
+                continue
+            mean = (a + b) / 2
+            std = np.sqrt((a + b) / 4)
+            z = abs(a - mean) / std
+            if z > 4.0:
+                failures.append((i, j, a, b, z))
+    return failures, transitions
+
+
+def test_site_permutation_detailed_balance_non_involution_three_cycle():
+    """Detailed balance for a 3-cycle operation (a genuine non-involution).
+
+    This is the load-bearing test: a reflection-only case would pass
+    even if the forward/inverse direction draw were broken, because an
+    involution is its own inverse. A 3-cycle exercises both direction
+    branches and would fail if the draw were dropped.
+    """
+    support = (0, 1, 2)
+    move = SitePermutation(operations=[{0: 1, 1: 2, 2: 0}])
+    sp_a, sp_b = 100, 101
+    # Composition (2 A, 1 B): C(3, 1) = 3 distinct states.
+    states = sorted(set(permutations((sp_a, sp_a, sp_b))))
+    failures, transitions = _detailed_balance_failures(
+        move, support, states, n_per=8000, seed=13579
+    )
+    assert not failures, (
+        "SitePermutation 3-cycle detailed-balance violation: "
+        + ", ".join(
+            f"({i},{j}): {a} vs {b} (z={z:.2f})" for i, j, a, b, z in failures
+        )
+    )
+    assert transitions.sum() == 8000 * len(states)
+
+
+def test_site_permutation_detailed_balance_reflection_involution():
+    """Detailed balance for a 4-site reflection (the <100>-style involution)."""
+    support = (0, 1, 2, 3)
+    move = SitePermutation(operations=[{0: 3, 1: 2, 2: 1, 3: 0}])
+    sp_a, sp_b = 100, 101
+    # Composition (2, 2): C(4, 2) = 6 distinct states.
+    states = sorted(set(permutations((sp_a, sp_a, sp_b, sp_b))))
+    failures, transitions = _detailed_balance_failures(
+        move, support, states, n_per=6000, seed=24680
+    )
+    assert not failures, (
+        "SitePermutation reflection detailed-balance violation: "
+        + ", ".join(
+            f"({i},{j}): {a} vs {b} (z={z:.2f})" for i, j, a, b, z in failures
+        )
+    )
+    assert transitions.sum() == 6000 * len(states)
