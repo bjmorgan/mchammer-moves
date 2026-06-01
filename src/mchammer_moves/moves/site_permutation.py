@@ -1,14 +1,16 @@
 """Site-permutation trial move applying a fixed index permutation.
 
 A *site permutation* is a bijection of site indices supplied by the
-caller as a sparse directed mapping ``{source: image}``; sites not named
-are fixed points. The :class:`SitePermutation` move applies one of a
-configured list of such permutations to the current occupations,
-proposing a single correlated jump along that operation. The indices are
-opaque labels: the move neither knows nor checks whether a permutation
-corresponds to a lattice symmetry. Typical callers reduce a geometric
-operation (a reflection across a ``<100>`` plane, a point inversion, a
-rotation) to an index mapping and pass it in.
+caller as a sparse mapping in which each entry ``i: j`` means site ``i``
+takes the occupation currently on site ``j`` (so the proposal sets
+``new[i] = old[j]``); sites not named are fixed points. The
+:class:`SitePermutation` move applies one of a configured list of such
+permutations to the current occupations, proposing a single correlated
+jump along that operation. The indices are opaque labels: the move
+neither knows nor checks whether a permutation corresponds to a lattice
+symmetry. Typical callers reduce a geometric operation (a reflection
+across a ``<100>`` plane, a point inversion, a rotation) to an index
+mapping and pass it in.
 """
 
 from __future__ import annotations
@@ -27,11 +29,14 @@ OperationInput = Mapping[int, int] | Sequence[tuple[int, int]]
 class _Operation(NamedTuple):
     """A validated operation and its precomputed inverse.
 
-    ``support`` is the tuple of moved site indices (the sources, which
-    equal the images for a valid permutation). ``forward`` maps each
-    source to its image; ``inverse`` is the reverse mapping. Both
-    directions are stored so :meth:`SitePermutation.propose` can apply
-    either without recomputing or risking the two getting out of step.
+    ``support`` is the tuple of moved site indices (the mapping's keys,
+    which equal the set of its values for a valid permutation).
+    ``forward`` is the operation as supplied — entry ``i: j`` means site
+    ``i`` takes the occupation of site ``j`` (``new[i] = old[j]``);
+    ``inverse`` is the reverse mapping, applied when the inverse
+    direction is drawn. Both directions are stored so
+    :meth:`SitePermutation.propose` can apply either without recomputing
+    or risking the two getting out of step.
     """
 
     support: tuple[int, ...]
@@ -58,11 +63,15 @@ class SitePermutation(Move):
     makes large correlated jumps along a chosen operation but reaches
     only the orbit its supplied operations generate.
 
-    Each operation is a sparse directed mapping from source site index
-    to image site index. The mapping must be a bijection on its support
-    (the set of sources must equal the set of images), so that every
-    moved site also receives an occupation. Sites not named in an
-    operation are fixed points and are left untouched.
+    Each operation is a sparse mapping in which entry ``i: j`` means
+    site ``i`` takes the occupation currently on site ``j``. The mapping
+    must be a bijection on its support — the set of sites it writes (the
+    keys) must equal the set of sites it reads (the values) — so that
+    every moved site both gives up and receives an occupation. Sites not
+    named in an operation are fixed points and are left untouched. For an
+    involution such as a reflection or point inversion the read/write
+    distinction is immaterial (paired sites simply exchange occupations);
+    it only fixes the direction convention for non-involutions.
 
     Detailed balance: selection of an ``(operation, direction)`` pair
     has probability :math:`1 / (2K)` for :math:`K` operations,
@@ -79,11 +88,11 @@ class SitePermutation(Move):
     ----------
     operations
         Non-empty sequence of operations. Each operation is a sparse
-        directed mapping from source site index to image site index,
-        given either as a ``Mapping[int, int]`` or as a sequence of
-        ``(source, image)`` pairs. Sites not named are fixed points.
-        Site indices are opaque labels; no sublattice or geometry
-        validation is performed.
+        mapping in which entry ``i: j`` means site ``i`` takes the
+        occupation currently on site ``j``, given either as a
+        ``Mapping[int, int]`` or as a sequence of ``(i, j)`` pairs. Sites
+        not named are fixed points. Site indices are opaque labels; no
+        sublattice or geometry validation is performed.
     name
         Identifier used for per-move acceptance tracking.
 
@@ -91,10 +100,10 @@ class SitePermutation(Move):
     ------
     ValueError
         If ``operations`` is empty, contains an empty operation,
-        contains an explicit ``source == image`` entry, lists a source
-        more than once, is not a bijection (a repeated image), or has
-        open support (the set of sources differs from the set of
-        images).
+        contains an explicit ``i == j`` entry (a fixed point), names the
+        same site as a key more than once, maps two sites to the same
+        source (not a bijection), or has open support (the set of keys
+        differs from the set of values).
 
     Notes
     -----
@@ -132,35 +141,35 @@ class SitePermutation(Move):
             for raw in items:
                 if len(raw) != 2:
                     raise ValueError(
-                        f"Operation {idx} entry {raw!r} is not a (source, image) "
+                        f"Operation {idx} entry {raw!r} is not a (site, source) "
                         "pair."
                     )
-                source, image = int(raw[0]), int(raw[1])
-                if source == image:
+                site, read_from = int(raw[0]), int(raw[1])
+                if site == read_from:
                     raise ValueError(
-                        f"Operation {idx} maps site {source} to itself; omit "
+                        f"Operation {idx} maps site {site} to itself; omit "
                         "fixed points rather than listing them explicitly."
                     )
-                if source in forward:
+                if site in forward:
                     raise ValueError(
-                        f"Operation {idx} lists site {source} as a source more "
+                        f"Operation {idx} names site {site} as a key more "
                         "than once."
                     )
-                forward[source] = image
-            images = list(forward.values())
-            if len(set(images)) != len(images):
+                forward[site] = read_from
+            sources = list(forward.values())
+            if len(set(sources)) != len(sources):
                 raise ValueError(
-                    f"Operation {idx} is not a bijection: an image index is "
-                    "repeated."
+                    f"Operation {idx} is not a bijection: two sites read from "
+                    "the same source."
                 )
-            if set(forward.keys()) != set(images):
+            if set(forward.keys()) != set(sources):
                 raise ValueError(
-                    f"Operation {idx} has open support: the set of sources "
-                    f"{sorted(forward.keys())} differs from the set of images "
-                    f"{sorted(images)}, so it is not a permutation. Every moved "
-                    "site must also receive an occupation."
+                    f"Operation {idx} has open support: the set of keys "
+                    f"{sorted(forward.keys())} differs from the set of values "
+                    f"{sorted(sources)}, so it is not a permutation. Every moved "
+                    "site must both give up and receive an occupation."
                 )
-            inverse = {image: source for source, image in forward.items()}
+            inverse = {read_from: site for site, read_from in forward.items()}
             support = tuple(forward.keys())
             materialised.append(_Operation(support, forward, inverse))
         super().__init__(name)
@@ -168,10 +177,11 @@ class SitePermutation(Move):
 
     @property
     def operations(self) -> list[dict[int, int]]:
-        """Copy of the configured operations as forward ``{source: image}`` maps.
+        """Copy of the configured operations as ``{i: j}`` maps.
 
-        Mutating the returned list or its dicts does not affect the
-        move's internal state.
+        Each entry ``i: j`` means site ``i`` takes the occupation of
+        site ``j`` (``new[i] = old[j]``). Mutating the returned list or
+        its dicts does not affect the move's internal state.
         """
         return [dict(op.forward) for op in self._operations]
 
