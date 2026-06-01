@@ -21,6 +21,10 @@ and handle acceptance, bookkeeping, and data-container integration:
 * :class:`IndexSetSwap` — generic group-permutation primitive that
   swaps occupations between two equal-length index sets drawn
   uniformly from a user-supplied list.
+* :class:`SitePermutation` — applies a caller-supplied permutation of
+  site occupations (reflections, point inversion, rotations) drawn
+  uniformly from a list, applying each operation or its inverse with
+  equal probability so detailed balance holds for any permutation.
 * :class:`MoveDispatcher` — weighted move selection and per-move
   bookkeeping, used internally by ensemble adapters.
 * :class:`CustomCanonicalEnsemble` — drop-in replacement for
@@ -43,6 +47,7 @@ from mchammer_moves.moves.cyclic_shift import CyclicShift
 from mchammer_moves.moves.index_set_swap import IndexSetSwap
 from mchammer_moves.moves.multi_pair_swap import MultiPairSwap
 from mchammer_moves.moves.pair_swap import PairSwap
+from mchammer_moves.moves.site_permutation import SitePermutation
 
 __all__ = [
     "CustomCanonicalEnsemble",
@@ -55,4 +60,5 @@ __all__ = [
     "MoveStats",
     "MultiPairSwap",
     "PairSwap",
+    "SitePermutation",
 ]

@@ -22,3 +22,4 @@ docs/superpowers/
 # Whitelist the ones that should ship.
 /*.md
 !/README.md
+!/CHANGELOG.md
