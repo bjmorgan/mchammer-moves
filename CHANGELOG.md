@@ -5,7 +5,7 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.4.0] - unreleased
+## [0.4.0] - 2026-06-01
 
 ### Added
 
@@ -51,6 +51,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Migrated to the `mchammer-pt` v0.2 `ensemble_cls=` API.
 
-[0.4.0]: https://github.com/bjmorgan/mchammer-moves/compare/v0.3.0...HEAD
+[0.4.0]: https://github.com/bjmorgan/mchammer-moves/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/bjmorgan/mchammer-moves/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/bjmorgan/mchammer-moves/releases/tag/v0.2.0
