@@ -5,6 +5,16 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] - 2026-06-01
+
+### Changed
+
+- Version bump only; no functional changes since v0.4.0. The `0.4.0`
+  version string was set before `SitePermutation` was added and was
+  installed from an untagged `main` in some environments, so a package
+  reporting `0.4.0` may predate `SitePermutation`. Releasing the same
+  code as `0.4.1` lets `pip` detect the upgrade.
+
 ## [0.4.0] - 2026-06-01
 
 ### Added
@@ -51,6 +61,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Migrated to the `mchammer-pt` v0.2 `ensemble_cls=` API.
 
+[0.4.1]: https://github.com/bjmorgan/mchammer-moves/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/bjmorgan/mchammer-moves/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/bjmorgan/mchammer-moves/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/bjmorgan/mchammer-moves/releases/tag/v0.2.0
