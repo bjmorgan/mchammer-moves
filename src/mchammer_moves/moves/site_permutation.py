@@ -176,12 +176,27 @@ class SitePermutation(Move):
         configuration: ConfigurationManager,
         next_random_number: Callable[[], float],
     ) -> tuple[list[int], list[int]] | None:
-        """Propose a site-permutation move.
+        """Propose a permutation of one operation's occupations.
 
-        Not implemented in this task; provided as a stub to enable
-        class instantiation for validation tests.
+        Picks one operation uniformly, then applies it (forward) or its
+        inverse, each with probability one half. Returns the operation's
+        support sites together with the species they would carry after
+        the chosen permutation, or ``None`` when the configuration is
+        invariant under the chosen operation (identity-skip).
         """
-        raise NotImplementedError(
-            "`propose` is not yet implemented; this task covers "
-            "constructor validation only."
-        )
+        # Uniform [0, K) integer; the floating-point bias is negligible
+        # for K far below 2^52, which holds for any realistic operation
+        # count.
+        k = int(next_random_number() * len(self._operations))
+        support, forward, inverse = self._operations[k]
+        # The direction draw is unconditional: skipping it for operations
+        # that happen to be involutions would silently break detailed
+        # balance for any non-involution operation.
+        sigma = forward if next_random_number() < 0.5 else inverse
+
+        occupations = configuration.occupations
+        new_species = [int(occupations[sigma[i]]) for i in support]
+        current_species = [int(occupations[i]) for i in support]
+        if new_species == current_species:
+            return None
+        return list(support), new_species
