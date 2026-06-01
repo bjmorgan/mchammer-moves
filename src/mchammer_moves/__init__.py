@@ -23,8 +23,8 @@ and handle acceptance, bookkeeping, and data-container integration:
   uniformly from a user-supplied list.
 * :class:`SitePermutation` — applies a caller-supplied permutation of
   site occupations (reflections, point inversion, rotations) drawn
-  uniformly from a list, with an unconditional forward/inverse
-  direction draw so detailed balance holds for non-involutions too.
+  uniformly from a list, applying each operation or its inverse with
+  equal probability so detailed balance holds for any permutation.
 * :class:`MoveDispatcher` — weighted move selection and per-move
   bookkeeping, used internally by ensemble adapters.
 * :class:`CustomCanonicalEnsemble` — drop-in replacement for
