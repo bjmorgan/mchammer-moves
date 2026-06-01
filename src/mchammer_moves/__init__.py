@@ -43,6 +43,7 @@ from mchammer_moves.moves.cyclic_shift import CyclicShift
 from mchammer_moves.moves.index_set_swap import IndexSetSwap
 from mchammer_moves.moves.multi_pair_swap import MultiPairSwap
 from mchammer_moves.moves.pair_swap import PairSwap
+from mchammer_moves.moves.site_permutation import SitePermutation
 
 __all__ = [
     "CustomCanonicalEnsemble",
@@ -55,4 +56,5 @@ __all__ = [
     "MoveStats",
     "MultiPairSwap",
     "PairSwap",
+    "SitePermutation",
 ]
