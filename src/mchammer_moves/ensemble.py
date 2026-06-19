@@ -486,8 +486,6 @@ class CustomWangLandauEnsemble(WangLandauEnsemble):  # type: ignore[misc]
         MC steps between data container row writes.
     trajectory_write_interval
         MC steps between trajectory snapshots.
-    schedule
-        Fill-factor update schedule: ``'halving'`` or ``'1_over_t'``.
 
     Notes
     -----
@@ -516,7 +514,6 @@ class CustomWangLandauEnsemble(WangLandauEnsemble):  # type: ignore[misc]
         data_container_write_period: float = 600,
         ensemble_data_write_interval: int | None = None,
         trajectory_write_interval: int | None = None,
-        schedule: str = "halving",
     ) -> None:
         self._dispatcher = MoveDispatcher(moves)
         self._window_reject_counts: Counter[str] = Counter()
@@ -543,7 +540,6 @@ class CustomWangLandauEnsemble(WangLandauEnsemble):  # type: ignore[misc]
             data_container_write_period=data_container_write_period,
             ensemble_data_write_interval=ensemble_data_write_interval,
             trajectory_write_interval=trajectory_write_interval,
-            schedule=schedule,
         )
 
     @property
