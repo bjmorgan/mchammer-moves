@@ -313,3 +313,43 @@ def test_wl_post_reset_data_container_rates_non_negative(small_ising_setup):
     data = ensemble._get_ensemble_data()
     assert data["pair_swap_window_rejection_rate"] >= 0.0
     assert data["pair_swap_wl_rejection_rate"] >= 0.0
+
+
+def test_wl_checkpoint_resume_round_trips(small_ising_factory, tmp_path):
+    """A checkpointed run reconstructs from its data container and restores step.
+
+    ``CustomWangLandauEnsemble`` is a drop-in for the stock
+    ``WangLandauEnsemble``, so resume goes through the base's native
+    ``_restart_ensemble`` -- which the base runs from within
+    ``super().__init__`` when ``dc_filename`` names an existing run. This pins
+    that the constructor does not interfere with the base's restart protocol.
+    """
+    build = small_ising_factory
+    dc = str(tmp_path / "wl_resume.dc")
+
+    setup = build()
+    ensemble = CustomWangLandauEnsemble(
+        structure=setup["structure"],
+        calculator=setup["calculator"],
+        energy_spacing=1.0,
+        moves=[(PairSwap(sublattice_index=0), 1.0)],
+        random_seed=1,
+        dc_filename=dc,
+    )
+    ensemble.run(200)
+    ensemble.write_data_container(dc)
+    saved_step = ensemble.step
+
+    resumed_setup = build()
+    resumed = CustomWangLandauEnsemble(
+        structure=resumed_setup["structure"],
+        calculator=resumed_setup["calculator"],
+        energy_spacing=1.0,
+        moves=[(PairSwap(sublattice_index=0), 1.0)],
+        random_seed=1,
+        dc_filename=dc,
+    )
+    assert resumed.step == saved_step
+    # The resumed ensemble keeps sampling through the custom dispatcher.
+    resumed.run(50)
+    assert resumed.step == saved_step + 50

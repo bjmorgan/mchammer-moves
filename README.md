@@ -148,7 +148,6 @@ mc = CustomWangLandauEnsemble(
     ],
     energy_limit_left=-100.0,
     energy_limit_right=-90.0,
-    schedule="1_over_t",
 )
 mc.run(1_000_000)
 

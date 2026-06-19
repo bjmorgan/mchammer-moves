@@ -5,6 +5,25 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Removed
+
+- `schedule` keyword argument from `CustomWangLandauEnsemble`. It mirrored the
+  patched icet fork's Wang-Landau constructor (the same fork-only family as the
+  `switch_mode` argument removed in 0.4.0) rather than adding behaviour of its
+  own: the class has no 1/t engine and inherits `_update_entropy` from the base.
+  `CustomWangLandauEnsemble` is now a drop-in replacement for the stock
+  `WangLandauEnsemble` (halving Wang-Landau with custom moves). The 1/t schedule
+  with custom moves remains available through
+  `mchammer_pt.contrib.CoordinatedCustomWangLandauEnsemble`.
+
+### Changed
+
+- Relaxed the `icet` dependency from the patched bjmorgan fork to a plain
+  `icet>=3.2`, now that the Wang-Landau adapter uses only the stock Wang-Landau
+  API.
+
 ## [0.4.1] - 2026-06-01
 
 ### Changed

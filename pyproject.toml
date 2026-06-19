@@ -12,14 +12,7 @@ license = "MIT"
 license-files = ["LICENSE"]
 authors = [{ name = "Benjamin J. Morgan", email = "b.j.morgan@bath.ac.uk" }]
 dependencies = [
-    # icet is pinned to the bjmorgan fork on GitLab, which includes the
-    # 1/t Wang-Landau schedule (schedule=, switch_mode=,
-    # entropy_reset_on_switch= parameters). Switch to a plain
-    # `icet>=<version>` specifier once these additions are merged into
-    # the upstream icet release. PyPI does not accept direct-URL
-    # dependencies, so this also gates whether mchammer-moves can be
-    # uploaded to PyPI.
-    "icet @ git+https://gitlab.com/bjmorgan/icet.git@master",
+    "icet>=3.2",
     "numpy",
     "ase",
 ]
@@ -42,20 +35,21 @@ classifiers = [
 # `mchammer_pt.testing.assert_boltzmann_sampling` utility is used by
 # the combined-kernel Boltzmann-sampling test in this package.
 #
-# `mchammer-pt` is not on PyPI yet, so we pull it from the v0.2.0
-# tag on GitHub. Switch to a plain `mchammer-pt>=0.2.0` specifier
-# once it is published. PyPI does not accept direct-URL
-# dependencies in uploaded distributions, so this also gates
-# whether `mchammer-moves` itself can be uploaded to PyPI.
+# `mchammer-pt` is not on PyPI yet, so we pull it from the `main`
+# branch on GitHub to test against the latest version. Switch to
+# a plain `mchammer-pt>=<version>` specifier once it is published.
+# PyPI does not accept direct-URL dependencies in uploaded
+# distributions, so this also gates whether `mchammer-moves`
+# itself can be uploaded to PyPI.
 pt = [
-    "mchammer-pt @ git+https://github.com/bjmorgan/mchammer-pt.git@v0.2.0",
+    "mchammer-pt @ git+https://github.com/bjmorgan/mchammer-pt.git@main",
 ]
 dev = [
     "pytest>=7",
     "scipy",
     "mypy",
     "ruff",
-    "mchammer-pt @ git+https://github.com/bjmorgan/mchammer-pt.git@v0.2.0",
+    "mchammer-pt @ git+https://github.com/bjmorgan/mchammer-pt.git@main",
 ]
 
 [tool.setuptools.packages.find]
