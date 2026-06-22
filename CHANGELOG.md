@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-06-22
+
+### Changed
+
+- README install instructions now use the PyPI package
+  (`pip install mchammer-moves`), replacing the editable-from-clone
+  instructions.
+
 ## [0.6.0] - 2026-06-22
 
 ### Removed

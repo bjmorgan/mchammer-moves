@@ -39,10 +39,17 @@ The package provides:
 - `MoveDispatcher`, the shared weighted-selection and per-move
   bookkeeping engine used by both ensemble adapters.
 
-Installation (editable):
+## Installation
 
 ```bash
-pip install -e .
+pip install mchammer-moves
+```
+
+For development, clone the repository and install editable with the test
+and lint tooling:
+
+```bash
+pip install -e ".[dev]"
 ```
 
 ## Quick start
