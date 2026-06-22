@@ -31,25 +31,19 @@ FIXTURE_CHAIN_INDICES: tuple[tuple[int, ...], ...] = ((0, 1, 2, 3),)
 """Site indices of the chains in the fixture, in geometric order.
 
 The fixture is a single one-dimensional chain of four sites. Moves
-that take chain definitions (for example `CyclicShift`) can use this
-constant to build fixture-aware ``ensemble_kwargs``; convert to
-``list[list[int]]`` for consumers that type their chain argument as a
-nested list. Example::
+that take chain definitions can use this constant to build
+fixture-aware ``ensemble_kwargs``, converting to ``list[list[int]]``
+for consumers that type their chain argument as a nested list. A unit
+`CyclicShift` on the one-chain fixture is energy-preserving and so
+non-ergodic; pair it with a `PairSwap` before sampling. Example::
 
-    from mchammer_moves import CustomCanonicalEnsemble, CyclicShift
-    from tests._boltzmann import (
-        FIXTURE_CHAIN_INDICES,
-        assert_boltzmann_sampling,
-    )
+    from mchammer_moves import CyclicShift, PairSwap
 
-    assert_boltzmann_sampling(
-        CustomCanonicalEnsemble,
-        ensemble_kwargs={
-            "moves": [
-                (CyclicShift(cycles=[list(c) for c in FIXTURE_CHAIN_INDICES]), 1.0),
-            ],
-        },
-    )
+    chains = [list(c) for c in FIXTURE_CHAIN_INDICES]
+    moves = [
+        (PairSwap(sublattice_index=0), 1.0),
+        (CyclicShift(cycles=chains), 1.0),
+    ]
 """
 
 _FIXTURE_N_SITES = 4
@@ -201,8 +195,12 @@ def assert_boltzmann_sampling(
     Raises
     ------
     AssertionError
-        If any class's empirical population deviates from the analytic
-        Boltzmann probability by more than `sigma_tolerance` sigma.
+        If a sampled energy matches none of the enumerated classes --
+        most often a move that breaks canonical composition, taking the
+        configuration outside the fixture's (2 Cu, 2 Au) state space --
+        or if any class's empirical population deviates from the
+        analytic Boltzmann probability by more than `sigma_tolerance`
+        sigma.
     RuntimeError
         If the fixture itself produces an unexpected number of energy
         classes (a fixture-invariant failure rather than a stationarity
