@@ -1,10 +1,11 @@
 """Boltzmann-sampling tests for `CustomCanonicalEnsemble`.
 
 Pins that `CustomCanonicalEnsemble` produces the analytic Boltzmann
-distribution on mchammer-pt's bundled fixture (4-site 1D chain,
+distribution on this package's local fixture (4-site 1D chain,
 2 Cu + 2 Au, NN-only pair ECI, ΔE ≈ 3 kT at the test temperature)
 under two configurations: `PairSwap` alone, and the combined
-`PairSwap` + `CyclicShift` kernel.
+`PairSwap` + `CyclicShift` kernel. The fixture and the sampling
+harness live in `tests/_boltzmann.py`.
 
 There is no `CyclicShift`-alone test on this fixture: a unit cyclic
 shift on a single chain moves the NN bond at site i to site i+1 and
@@ -12,17 +13,16 @@ leaves the bond multiset invariant, so the move is exactly
 energy-preserving regardless of chain length. A single-chain fixture
 cannot discriminate `CyclicShift`'s correctness from a no-op kernel.
 The combined kernel reaches all six microstates through `PairSwap`
-(known Boltzmann-sampling-correct via mchammer-pt's framework test)
-and pins `CyclicShift`'s correctness against the joint-kernel
-stationary distribution. A two-chain analytic fixture would isolate
-`CyclicShift` further but is deferred work.
+(pinned Boltzmann-correct by the `PairSwap`-alone test above) and
+pins `CyclicShift`'s correctness against the joint-kernel stationary
+distribution. A two-chain analytic fixture would isolate `CyclicShift`
+further but is deferred work.
 """
 
 from __future__ import annotations
 
-from mchammer_pt.testing import FIXTURE_CHAIN_INDICES, assert_boltzmann_sampling
-
 from mchammer_moves import CustomCanonicalEnsemble, CyclicShift, PairSwap
+from tests._boltzmann import FIXTURE_CHAIN_INDICES, assert_boltzmann_sampling
 
 
 def test_pair_swap_alone_samples_correct_boltzmann() -> None:
@@ -40,57 +40,6 @@ def test_pair_swap_alone_samples_correct_boltzmann() -> None:
             "moves": [(PairSwap(sublattice_index=0), 1.0)],
         },
     )
-
-
-def test_process_pool_propagates_per_move_acceptance(small_ising_setup) -> None:
-    """`CustomCanonicalEnsemble` survives the `process_pool` spawn boundary.
-
-    Constructs a `CanonicalParallelTempering.process_pool(...)` with
-    `ensemble_cls=CustomCanonicalEnsemble`, runs a few cycles, and
-    checks that each replica's `BaseDataContainer` carries the
-    per-move acceptance fields produced by `_get_ensemble_data`.
-    Pins the contract that per-move statistics are recoverable from
-    a multiprocess PT run without observer forwarding.
-
-    A regression in `CustomCanonicalEnsemble.__init__` taking a
-    non-picklable arg, or in mchammer-pt's spawn semantics, surfaces
-    here rather than in production.
-    """
-    from mchammer_pt import CanonicalParallelTempering
-
-    setup = small_ising_setup
-    ce = setup["cluster_expansion"]
-    atoms = setup["structure"]
-    chain = list(range(len(atoms)))
-    with CanonicalParallelTempering.process_pool(
-        cluster_expansion=ce,
-        atoms=atoms,
-        temperatures=[300.0, 600.0],
-        block_size=20,
-        random_seed=0,
-        ensemble_cls=CustomCanonicalEnsemble,
-        ensemble_kwargs={
-            "moves": [
-                (PairSwap(sublattice_index=0), 1.0),
-                (CyclicShift(cycles=[chain]), 1.0),
-            ],
-            "ensemble_data_write_interval": 10,
-        },
-    ) as pt:
-        pt.run(n_cycles=3)
-        containers = pt.pool.data_containers()
-
-    assert len(containers) == 2
-    for dc in containers:
-        cols = dc.data.columns
-        assert "pair_swap_acceptance_rate" in cols
-        assert "cyclic_shift_acceptance_rate" in cols
-        # Final rows should have valid per-interval rates in [0, 1].
-        for col in ("pair_swap_acceptance_rate", "cyclic_shift_acceptance_rate"):
-            final = float(dc.data[col].iloc[-1])
-            assert 0.0 <= final <= 1.0, (
-                f"{col} per-interval rate {final} out of [0, 1] in worker output"
-            )
 
 
 def test_combined_pair_swap_and_cyclic_shift_samples_correct_boltzmann() -> None:

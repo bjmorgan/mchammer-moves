@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mchammer-moves"
-version = "0.5.0"
+version = "0.6.0"
 description = "Custom Monte Carlo moves for icet/mchammer."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -27,29 +27,11 @@ classifiers = [
 ]
 
 [project.optional-dependencies]
-# `mchammer-pt` is an optional integration dependency: importing
-# `mchammer_moves` itself does not require it, but consuming
-# `CustomCanonicalEnsemble` through parallel tempering does. The
-# integration uses `mchammer-pt`'s native `ensemble_cls=` /
-# `ensemble_kwargs=` API (mchammer-pt v0.2+); the public
-# `mchammer_pt.testing.assert_boltzmann_sampling` utility is used by
-# the combined-kernel Boltzmann-sampling test in this package.
-#
-# `mchammer-pt` is not on PyPI yet, so we pull it from the `main`
-# branch on GitHub to test against the latest version. Switch to
-# a plain `mchammer-pt>=<version>` specifier once it is published.
-# PyPI does not accept direct-URL dependencies in uploaded
-# distributions, so this also gates whether `mchammer-moves`
-# itself can be uploaded to PyPI.
-pt = [
-    "mchammer-pt @ git+https://github.com/bjmorgan/mchammer-pt.git@main",
-]
 dev = [
     "pytest>=7",
     "scipy",
     "mypy",
     "ruff",
-    "mchammer-pt @ git+https://github.com/bjmorgan/mchammer-pt.git@main",
 ]
 
 [tool.setuptools.packages.find]

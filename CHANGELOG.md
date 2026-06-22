@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-06-22
+
+### Removed
+
+- The `pt` optional-dependencies extra. `mchammer-pt` depends on
+  `mchammer-moves`, so installing `mchammer-pt` is the supported way to
+  obtain the parallel-tempering integration; the extra was redundant.
+- The `mchammer-pt` test dependency from the `dev` extra. The
+  Boltzmann-sampling tests no longer import `mchammer-pt`.
+
+### Changed
+
+- The Boltzmann-sampling tests are now self-contained: they drive the
+  ensemble directly through a local test harness rather than borrowing
+  `mchammer-pt`'s `assert_boltzmann_sampling`. `mchammer-moves` now has
+  no runtime, test, or extras dependency on `mchammer-pt`, completing a
+  one-directional dependency graph (`mchammer-pt` depends on
+  `mchammer-moves`, never the reverse).
+
 ## [0.5.0] - 2026-06-19
 
 ### Removed
@@ -82,6 +101,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Migrated to the `mchammer-pt` v0.2 `ensemble_cls=` API.
 
+[0.6.0]: https://github.com/bjmorgan/mchammer-moves/compare/v0.5.0...v0.6.0
+[0.5.0]: https://github.com/bjmorgan/mchammer-moves/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/bjmorgan/mchammer-moves/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/bjmorgan/mchammer-moves/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/bjmorgan/mchammer-moves/compare/v0.2.0...v0.3.0

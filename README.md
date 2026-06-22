@@ -45,13 +45,6 @@ Installation (editable):
 pip install -e .
 ```
 
-To use the parallel-tempering integration, install the `pt` extra
-(pulls `mchammer-pt` v0.2.0 from GitHub until it is on PyPI):
-
-```bash
-pip install -e ".[pt]"
-```
-
 ## Quick start
 
 `structure`, `ce`, and `cycles` below are placeholders for your atoms
